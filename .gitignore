@@ -5,6 +5,11 @@ datasets/
 wandb/
 output/
 
+# shared outside of repo
+predictions/
+data/
+models/
+
 # Editors
 .vscode/
 
