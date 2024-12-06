@@ -211,7 +211,7 @@ def main(args):
     print("Metrics complete.")
 
     print("Running generation...")
-    molecules, raw_outputs = util.generate_molecules(model, dm, args.integration_steps, args.ode_sampling_strategy)
+    molecules, raw_outputs = util.generate_molecules(model, dm, args.integration_steps, args.ode_sampling_strategy, sanitise=args.sanitise)
     print("Generation complete.")
 
     print(f"Saving predictions to {args.save_dir}/{args.save_file}")
@@ -233,6 +233,8 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", type=str)
     parser.add_argument("--save_dir", type=str)
     parser.add_argument("--save_file", type=str, default=DEFAULT_SAVE_FILE)
+
+    parser.add_argument("--sanitise", type=bool, default=True)
 
     parser.add_argument("--batch_cost", type=int, default=DEFAULT_BATCH_COST)
     parser.add_argument("--dataset_split", type=str, default=DEFAULT_DATASET_SPLIT)
