@@ -153,7 +153,7 @@ def init_metrics(data_path, model):
     return metrics, stability_metrics
 
 
-def generate_molecules(model, dm, steps, strategy, stabilities=False):
+def generate_molecules(model, dm, steps, strategy, stabilities=False, sanitise=True):
     test_dl = dm.test_dataloader()
     model.eval()
     cuda_model = model.to("cuda")
@@ -164,7 +164,7 @@ def generate_molecules(model, dm, steps, strategy, stabilities=False):
         output = cuda_model._generate(batch, steps, strategy)
         outputs.append(output)
 
-    molecules = [cuda_model._generate_mols(output) for output in outputs]
+    molecules = [cuda_model._generate_mols(output, sanitise=sanitise) for output in outputs]
     molecules = [mol for mol_list in molecules for mol in mol_list]
 
     if not stabilities:
