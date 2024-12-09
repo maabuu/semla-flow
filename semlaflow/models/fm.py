@@ -909,6 +909,64 @@ class MolecularCFM(L.LightningModule):
         predicted["coords"] = predicted["coords"] * self.coord_scale
         return predicted
 
+    def _interpolate_predict(self, batch, steps, denoise_steps= 50, strategy="linear"):
+        prior, data, interpolated, times = batch
+
+        if self.distill:
+            return self._distill_generate(prior)
+
+        if strategy == "linear":
+            time_points = np.linspace(0, 1, steps + 1).tolist()
+
+        elif strategy == "log":
+            time_points = (1 - np.geomspace(0.01, 1.0, steps + 1)).tolist()
+            time_points.reverse()
+
+        else:
+            raise ValueError(f"Unknown ODE integration strategy '{strategy}'")
+
+        predictations = []
+        for i in range(10):
+            step_sizes = [t1 - t0 for t0, t1 in zip(time_points[:-1], time_points[1:])]
+            # Start the loop from denoise_steps
+            step_sizes = step_sizes[-denoise_steps:]
+
+            curr = {k: v.clone() for k, v in interpolated.items()}
+            curr["coords"] = curr["coords"]+ 0.1* torch.randn_like(curr["coords"])
+            cond_batch = {
+                "coords": torch.zeros_like(prior["coords"]),
+                "atomics": torch.zeros_like(prior["atomics"]),
+                "bonds": torch.zeros_like(prior["bonds"])
+            }
+
+            with torch.no_grad():
+                for step_size in step_sizes:
+                    cond = cond_batch if self.self_condition else None
+                    coords, type_logits, bond_logits, charge_logits = self(curr, times, training=False, cond_batch=cond)
+
+                    type_probs = F.softmax(type_logits, dim=-1)
+                    bond_probs = F.softmax(bond_logits, dim=-1)
+                    charge_probs = F.softmax(charge_logits, dim=-1)
+
+                    cond_batch = {
+                        "coords": coords,
+                        "atomics": type_probs,
+                        "bonds": bond_probs
+                    }
+                    predicted = {
+                        "coords": coords,
+                        "atomics": type_probs,
+                        "bonds": bond_probs,
+                        "charges": charge_probs,
+                        "mask": curr["mask"]
+                    }
+
+                    curr = self.integrator.step(curr, predicted, prior, times, step_size)
+                    times = times + step_size
+
+            predicted["coords"] = predicted["coords"] * self.coord_scale
+            predictations.append(predicted)
+        return predictations
     def _distill_generate(self, prior):
         cond_batch = {
             "coords": torch.zeros_like(prior["coords"]),
