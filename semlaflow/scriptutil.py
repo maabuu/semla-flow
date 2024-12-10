@@ -159,7 +159,7 @@ def init_metrics(data_path, model):
 def generate_molecules(model, dm, steps, strategy, stabilities=False):
     test_dl = dm.test_dataloader()
     model.eval()
-    cuda_model = model.to("cuda")
+    cuda_model = model.to("cpu")
 
     outputs = []
     for batch in tqdm(test_dl):
@@ -177,19 +177,18 @@ def generate_molecules(model, dm, steps, strategy, stabilities=False):
     stabilities = [mol_stab for mol_stabs in stabilities for mol_stab in mol_stabs]
     return molecules, outputs, stabilities
 
-def generate_similar_molecules(model, dm, steps, denoise_steps, strategy, stabilities=False):
-    test_dl = dm.test_dataloader()
+def generate_similar_molecules(model, dm, steps, denoise_steps,sigma, strategy, stabilities=False):
+    edit_dl = dm.edit_dataloader()
     model.eval()
     cuda_model = model.to("cpu")
 
     outputs = []
-    for batch in tqdm(test_dl):
+    for batch in tqdm(edit_dl):
         if len(batch[0]) == 0:  # Skip empty batches
             continue
 
-        output = cuda_model._interpolate_predict(batch, steps, denoise_steps= denoise_steps, strategy = strategy)
-        # outputs.append(output)
-        outputs.extend([sublist for sublist in output])
+        output = cuda_model._interpolate_predict(batch, steps, denoise_steps= denoise_steps, sigma=sigma, strategy = strategy)
+        outputs.append(output)
 
     molecules = [cuda_model._generate_mols(output) for output in outputs]
     molecules = [mol for mol_list in molecules for mol in mol_list]

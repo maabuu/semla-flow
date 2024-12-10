@@ -179,9 +179,10 @@ def build_dm(args, hparams, vocab):
     dm = GeometricInterpolantDM(
         None,
         None,
+        None,
         dataset,
         args.batch_cost,
-        test_interpolant=eval_interpolant,
+        edit_interpolant=eval_interpolant,
         bucket_limits=bucket_limits,
         bucket_cost_scale=args.bucket_cost_scale,
         pad_to_bucket=False
@@ -255,7 +256,7 @@ def main(args):
     # print("Metrics complete.")
 
     print("Running generation...")
-    molecules, raw_outputs = util.generate_similar_molecules( model, dm, steps= args.integration_steps, denoise_steps=args.denoise_steps, strategy=args.ode_sampling_strategy)
+    molecules, raw_outputs = util.generate_similar_molecules( model, dm, steps= args.integration_steps, denoise_steps=args.denoise_steps, sigma=args.sigma, strategy=args.ode_sampling_strategy)
     print("Generation complete.")
 
     print(f"Saving predictions to {args.save_dir}/{args.save_file}")
@@ -282,6 +283,8 @@ if __name__ == "__main__":
     parser.add_argument("--n_molecules", type=int, default=DEFAULT_N_MOLECULES)
     parser.add_argument("--integration_steps", type=int, default=DEFAULT_INTEGRATION_STEPS)
     parser.add_argument("--denoise_steps", type=int, default=DEFAULT_DENOISE_STEPS)
+    parser.add_argument("--sigma", type=float, default=0.1)
+
     parser.add_argument("--cat_sampling_noise_level", type=int, default=DEFAULT_CAT_SAMPLING_NOISE_LEVEL)
     parser.add_argument("--ode_sampling_strategy", type=str, default=DEFAULT_ODE_SAMPLING_STRATEGY)
 

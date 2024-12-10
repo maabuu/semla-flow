@@ -35,7 +35,7 @@ DEFAULT_ODE_SAMPLING_STRATEGY = "log"
 
 
 def load_model(args, vocab):
-    checkpoint = torch.load(args.ckpt_path)
+    checkpoint = torch.load(args.ckpt_path, map_location=torch.device('cpu'))
     hparams = checkpoint["hyper_parameters"]
 
     hparams["compile_model"] = False
@@ -179,6 +179,7 @@ def build_dm(args, hparams, vocab):
         None,
         None,
         dataset,
+        None,
         args.batch_cost,
         test_interpolant=eval_interpolant,
         bucket_limits=bucket_limits,
@@ -239,6 +240,7 @@ def build_dm(args, hparams, vocab):
         None,
         None,
         dataset,
+        None,
         args.batch_cost,
         test_interpolant=eval_interpolant,
         bucket_limits=bucket_limits,
@@ -249,7 +251,7 @@ def build_dm(args, hparams, vocab):
 
 
 def dm_from_ckpt(args, vocab):
-    checkpoint = torch.load(args.ckpt_path)
+    checkpoint = torch.load(args.ckpt_path,map_location=torch.device('cpu'))
     hparams = checkpoint["hyper_parameters"]
     dm = build_dm(args, hparams, vocab)
     return dm
@@ -294,7 +296,7 @@ def main(args):
 
     L.seed_everything(12345)
     util.disable_lib_stdout()
-    util.configure_fs()
+    # util.configure_fs()
 
     print("Building model vocab...")
     vocab = util.build_vocab()
@@ -308,9 +310,9 @@ def main(args):
     model = load_model(args, vocab)
     print("Model complete.")
 
-    print("Initialising metrics...")
-    metrics, _ = util.init_metrics(args.data_path, model)
-    print("Metrics complete.")
+    # print("Initialising metrics...")
+    # metrics, _ = util.init_metrics(args.data_path, model)
+    # print("Metrics complete.")
 
     print("Running generation...")
     molecules, raw_outputs = util.generate_molecules(model, dm, args.integration_steps, args.ode_sampling_strategy)
@@ -321,9 +323,9 @@ def main(args):
     print("Complete.")
 
     print("Calculating generative metrics...")
-    results = util.calc_metrics_(molecules, metrics)
-    util.print_results(results)
-    print("Generation script complete!")
+    # results = util.calc_metrics_(molecules, metrics)
+    # util.print_results(results)
+    # print("Generation script complete!")
 
 
 if __name__ == "__main__":
@@ -343,6 +345,8 @@ if __name__ == "__main__":
     parser.add_argument("--ode_sampling_strategy", type=str, default=DEFAULT_ODE_SAMPLING_STRATEGY)
 
     parser.add_argument("--bucket_cost_scale", type=str, default=DEFAULT_BUCKET_COST_SCALE)
+    import torch.multiprocessing as mp
 
+    mp.set_start_method("spawn", force=True)
     args = parser.parse_args()
     main(args)

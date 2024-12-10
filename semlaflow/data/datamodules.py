@@ -17,6 +17,7 @@ class SmolDM(L.LightningDataModule):
         train_dataset,
         val_dataset,
         test_dataset,
+        edit_dataset,
         batch_cost,
         bucket_limits=None,
         bucket_cost_scale="constant",
@@ -40,11 +41,15 @@ class SmolDM(L.LightningDataModule):
             if test_dataset is not None and max(test_dataset.lengths) > largest_padding:
                 raise ValueError("At least one item in test dataset is larger than largest padded size.")
 
-        self._num_workers = len(os.sched_getaffinity(0))
+            if edit_dataset is not None and max(edit_dataset.lengths) > largest_padding:
+                raise ValueError("At least one item in test dataset is larger than largest padded size.")
 
+        # self._num_workers = len(os.sched_getaffinity(0))
+        self._num_workers = 0
         self.train_dataset = train_dataset
         self.val_dataset = val_dataset
         self.test_dataset = test_dataset
+        self.edit_dataset = edit_dataset
 
         self.batch_cost = batch_cost
         self.bucket_limits = bucket_limits
@@ -56,10 +61,12 @@ class SmolDM(L.LightningDataModule):
         train_data = self.train_dataset
         val_data = self.val_dataset
         test_data = self.test_dataset
+        edit_dataset = self.edit_dataset
 
         train_hps = {f"train-{k}": v for k, v in train_data.hparams.items()} if train_data is not None else {}
         val_hps = {f"val-{k}": v for k, v in val_data.hparams.items()} if val_data is not None else {}
         test_hps = {f"test-{k}": v for k, v in test_data.hparams.items()} if test_data is not None else {}
+        edit_hps = {f"test-{k}": v for k, v in edit_dataset.hparams.items()} if edit_dataset is not None else {}
 
         hparams = {
             "batch-cost": self.batch_cost,
@@ -67,7 +74,8 @@ class SmolDM(L.LightningDataModule):
             "bucket-cost-scale": self.bucket_cost_scale,
             **train_hps,
             **val_hps,
-            **test_hps
+            **test_hps,
+            **edit_hps
         }
         return hparams
 
@@ -115,6 +123,19 @@ class SmolDM(L.LightningDataModule):
         )
         return dataloader
 
+    def edit_dataloader(self):
+        # TODO: add sampler as flag?
+        sampler = None
+
+        dataloader = DataLoader(
+            self.edit_dataset,
+            batch_size=1,
+            shuffle=False,
+            batch_sampler=sampler,
+            num_workers=self._num_workers,
+            collate_fn=partial(self._collate, dataset="edit")
+        )
+        return dataloader
     def _sampler(self, dataset, drop_last=False):
         sampler = None
         if self.bucket_limits is not None:
@@ -245,23 +266,27 @@ class GeometricInterpolantDM(GeometricDM):
         train_dataset,
         val_dataset,
         test_dataset,
+        edit_dataset,
         batch_size,
         train_interpolant=None,
         val_interpolant=None,
         test_interpolant=None,
+        edit_interpolant=None,
         bucket_limits=None,
         bucket_cost_scale=None,
-        pad_to_bucket=False
+        pad_to_bucket=False,
     ):
 
         self.train_interpolant = train_interpolant
         self.val_interpolant = val_interpolant
         self.test_interpolant = test_interpolant
+        self.edit_interpolant = edit_interpolant
 
         super().__init__(
             train_dataset,
             val_dataset,
             test_dataset,
+            edit_dataset,
             batch_size,
             bucket_limits=bucket_limits,
             bucket_cost_scale=bucket_cost_scale,
@@ -270,8 +295,8 @@ class GeometricInterpolantDM(GeometricDM):
 
     @property
     def hparams(self):
-        interps = [self.train_interpolant, self.val_interpolant, self.test_interpolant]
-        datasets = ["train", "val", "test"]
+        interps = [self.train_interpolant, self.val_interpolant, self.test_interpolant, self.edit_interpolant]
+        datasets = ["train", "val", "test", "edit"]
 
         hparams = []
         for dataset, interp in zip(datasets, interps):
@@ -296,6 +321,11 @@ class GeometricInterpolantDM(GeometricDM):
 
         elif dataset == "test" and self.test_interpolant is not None:
             objs = self.test_interpolant.interpolate(batch)
+            batch = list(zip(*objs))
+
+        elif dataset == "edit" and self.edit_interpolant is not None:
+            batch = [batch[0] for _ in range(self.batch_cost)]
+            objs = self.edit_interpolant.interpolate(batch)
             batch = list(zip(*objs))
 
         return super()._collate(batch, dataset)
