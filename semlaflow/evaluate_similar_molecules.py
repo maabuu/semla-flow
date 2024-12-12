@@ -1,19 +1,34 @@
 import os
-from rdkit import Chem
-from rdkit.Chem import QED, Descriptors, Crippen, Lipinski
-from rdkit.Chem.FilterCatalog import *
-from rdkit.Chem import rdMolDescriptors as rdMD
-import numpy as np
+import sys
 from copy import deepcopy
-from tqdm import tqdm
-from semlaflow.util.metrics import Uniqueness,Novelty
+
+import numpy as np
 import pandas as pd
+from rdkit import Chem
+from rdkit.Chem import QED, Crippen, Descriptors, Lipinski
+from rdkit.Chem.rdchem import Mol
+from rdkit.Chem.rdmolfiles import SDMolSupplier
+from rdkit.Chem.rdmolops import SanitizeMol
+from rdkit.Chem.SpacialScore import SPS
+from tqdm import tqdm
+
+from semlaflow.util.metrics import Novelty, Uniqueness
+
+try:
+    # if rdkit was installed from pip
+    # https://greglandrum.github.io/rdkit-blog/posts/2023-12-01-using_sascore_and_npscore.html
+    from rdkit.Contrib.SA_Score import sascorer
+except ImportError:
+    # if rdkit was installed from conda
+    sys.path.append(
+        os.path.join(os.environ["CONDA_PREFIX"], "share", "RDKit", "Contrib")
+    )
+    from SA_Score import sascorer
 
 
-
-def read_sdf(file_path):
+def read_sdf(file_path: str) -> list[Mol]:
     """Reads an SDF file and returns a list of molecules along with their names."""
-    supplier = Chem.SDMolSupplier(file_path)
+    supplier = SDMolSupplier(file_path)
     molecules = []
     for mol in supplier:
         if mol is not None:
@@ -21,27 +36,53 @@ def read_sdf(file_path):
             molecules.append((name, mol))
     return molecules
 
-def compute_sa_score(mol):
+
+def compute_sa_score(mol: Mol) -> float:
+    """Compute the synthetic accessibility score of a molecule.
+    RDKit blog: https://greglandrum.github.io/rdkit-blog/posts/2023-12-01-using_sascore_and_npscore.html
+    Paper reference: https://jcheminf.biomedcentral.com/articles/10.1186/1758-2946-1-8
+    """
     try:
-        sa_score = rdMD.CalcSPS(mol)
+        sa_score = sascorer.calculateScore(mol)
         return sa_score
     except Exception:
-        return None
+        return float("nan")
 
-def get_logp(mol):
+
+def compute_spacial_score(mol: Mol) -> float:
+    """Compute the spacial score of a molecule.
+    RDKit reference: https://rdkit.org/docs/source/rdkit.Chem.SpacialScore.html
+    Paper reference: https://pubs.acs.org/doi/10.1021/acs.jmedchem.3c00689
+    """
+    try:
+        return float(SPS(mol, normalize=True))
+    except Exception:
+        return float("nan")
+
+
+def compute_logp(mol):
+    """Compute the logP of a molecule using the Crippen method.
+    RDKit reference: https://www.rdkit.org/docs/source/rdkit.Chem.Crippen.html
+    Paper reference: https://pubs.acs.org/doi/10.1021/ci990307l
+    """
     return Crippen.MolLogP(mol)
 
 
 def obey_lipinski(mol):
+    """Compute the Lipinski rule of 5 for a molecule.
+    RDKit reference: https://www.rdkit.org/docs/GettingStartedInPython.html#lipinski-rule-of-5
+    Paper reference: https://www.sciencedirect.com/science/article/pii/S0169409X00001290
+    """
     mol = deepcopy(mol)
-    Chem.SanitizeMol(mol)
+    SanitizeMol(mol)
     rule_1 = Descriptors.ExactMolWt(mol) < 500
     rule_2 = Lipinski.NumHDonors(mol) <= 5
     rule_3 = Lipinski.NumHAcceptors(mol) <= 10
-    logp = get_logp(mol)
-    rule_4 = (-2 <= logp <= 5)
+    logp = compute_logp(mol)
+    rule_4 = -2 <= logp <= 5
     rule_5 = Chem.rdMolDescriptors.CalcNumRotatableBonds(mol) <= 10
     return [int(rule) for rule in [rule_1, rule_2, rule_3, rule_4, rule_5]]
+
 
 def evaluate_metrics(generated_sdf, reference_sdf, batch_size=100):
     # Load molecules and group by reference names
@@ -51,7 +92,9 @@ def evaluate_metrics(generated_sdf, reference_sdf, batch_size=100):
     # Group generated molecules by their reference names
     grouped_mols = {}
     for name, mol in generated_mols:
-        ref_name = name.split("_")[0]  # Assumes names are like 'reference_0', 'reference_1'
+        ref_name = name.split("_")[
+            0
+        ]  # Assumes names are like 'reference_0', 'reference_1'
         if ref_name not in grouped_mols:
             grouped_mols[ref_name] = []
         grouped_mols[ref_name].append(mol)
@@ -78,8 +121,10 @@ def evaluate_metrics(generated_sdf, reference_sdf, batch_size=100):
             if mol is not None:
                 qed_score = QED.qed(mol)
                 sa_score = compute_sa_score(mol)
-                normalized_sa = sa_score / len([atom for atom in mol.GetAtoms() if atom.GetAtomicNum() > 1])
-                logp_score = get_logp(mol)
+                normalized_sa = sa_score / len(
+                    [atom for atom in mol.GetAtoms() if atom.GetAtomicNum() > 1]
+                )
+                logp_score = compute_logp(mol)
                 lipinski_score = np.sum(obey_lipinski(mol))
 
                 qed_scores.append(qed_score)
@@ -112,7 +157,9 @@ if __name__ == "__main__":
     generated_sdf_path = "./generated_molecules.sdf"  # Path to generated SDF file
     reference_sdf_path = "./reference_molecules.sdf"  # Path to reference SDF file
 
-    results, mean_metrics, std_metrics = evaluate_metrics(generated_sdf_path, reference_sdf_path, batch_size=100)
+    results, mean_metrics, std_metrics = evaluate_metrics(
+        generated_sdf_path, reference_sdf_path, batch_size=100
+    )
 
     # Print results for each group
     print("\nEvaluation Results (per group):")
