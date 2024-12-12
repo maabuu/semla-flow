@@ -1,5 +1,9 @@
 # Basic Gitignore file
 
+# data files
+*.smol
+*.ckpt
+
 # Editors
 .vscode/
 
