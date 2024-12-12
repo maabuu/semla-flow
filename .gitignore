@@ -5,6 +5,7 @@
 
 # Jupyter notebook checkpoints
 notebooks/.ipynb_checkpoints/
+*notes*
 
 # Python cache files
 __pycache__/
