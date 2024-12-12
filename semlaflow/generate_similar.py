@@ -21,7 +21,7 @@ from semlaflow.data.datasets import GeometricDataset
 from semlaflow.data.datamodules import GeometricInterpolantDM
 from semlaflow.data.interpolate import GeometricInterpolant, GeometricNoiseSampler
 from semlaflow.util.rdkit import write_mols_to_sdf
-
+import numpy as np
 
 # Default script arguments
 DEFAULT_SAVE_FILE = "predictions.smol"
@@ -156,6 +156,16 @@ def build_dm(args, hparams, vocab):
     type_mask_index = vocab.indices_from_tokens(["<MASK>"])[0] if hparams["val-type-interpolation"] == "mask" else None
     bond_mask_index = None
 
+    if args.ode_sampling_strategy == "linear":
+        time_points = np.linspace(0, 1, args.integration_steps + 1).tolist()
+        time_points.reverse()
+
+    elif args.ode_sampling_strategy == "log":
+        time_points = (1 - np.geomspace(0.01, 1.0, args.integration_steps + 1)).tolist()
+
+
+    fixed_time = time_points[args.denoise_steps]
+
     prior_sampler = GeometricNoiseSampler(
         vocab.size,
         n_bond_types,
@@ -174,7 +184,7 @@ def build_dm(args, hparams, vocab):
         bond_interpolation=hparams["val-bond-interpolation"],
         equivariant_ot=False,
         batch_ot=False,
-        fixed_time = (args.integration_steps - args.denoise_steps)/args.integration_steps
+        fixed_time = fixed_time,
     )
     dm = GeometricInterpolantDM(
         None,
