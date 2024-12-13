@@ -92,15 +92,18 @@ def compute_spacial_score(mol: Mol) -> float:
         return float("nan")
 
 
-def compute_logp(mol):
+def compute_logp(mol: Mol) -> float:
     """Compute the logP of a molecule using the Crippen method.
     RDKit reference: https://www.rdkit.org/docs/source/rdkit.Chem.Crippen.html
     Paper reference: https://pubs.acs.org/doi/10.1021/ci990307l
     """
-    return Crippen.MolLogP(mol)
+    try:
+        return float(Crippen.MolLogP(mol))
+    except Exception:
+        return float("nan")
 
 
-def obey_lipinski(mol):
+def obey_lipinski(mol: Mol) -> tuple[int, int, int, int, int]:
     """Compute the Lipinski rule of 5 for a molecule.
     RDKit reference: https://www.rdkit.org/docs/GettingStartedInPython.html#lipinski-rule-of-5
     Paper reference: https://www.sciencedirect.com/science/article/pii/S0169409X00001290
