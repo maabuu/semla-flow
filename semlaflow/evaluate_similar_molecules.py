@@ -4,6 +4,7 @@ from copy import deepcopy
 
 import numpy as np
 import pandas as pd
+from posebusters import PoseBusters
 from rdkit import Chem
 from rdkit.Chem import QED, Crippen, Descriptors, Lipinski
 from rdkit.Chem.rdchem import Mol
@@ -25,6 +26,8 @@ except ImportError:
     )
     from SA_Score import sascorer
 
+buster = PoseBusters("mol")
+
 
 def read_sdf(file_path: str) -> list[Mol]:
     """Reads an SDF file and returns a list of molecules along with their names."""
@@ -35,6 +38,35 @@ def read_sdf(file_path: str) -> list[Mol]:
             name = mol.GetProp("_Name") if mol.HasProp("_Name") else "Unknown"
             molecules.append((name, mol))
     return molecules
+
+
+def compute_chemical_and_physical_validity(mol: Mol):
+    pb_results: dict[str, bool] = buster.bust(mol).iloc[0].to_dict()
+
+    # group checks together
+    check_connected = [
+        "all_atoms_connected",
+    ]
+    checks_chemical = [
+        "mol_pred_loaded",
+        "sanitization",
+        "inchi_convertible",
+    ]
+    checks_physical = [
+        "bond_lengths",
+        "bond_angles",
+        "internal_steric_clash",
+        "aromatic_ring_flatness",
+        "double_bond_flatness",
+        "internal_energy",
+    ]
+    pb_results |= {
+        "connected": all(pb_results[check] for check in check_connected),
+        "chemical": all(pb_results[check] for check in checks_chemical),
+        "physical": all(pb_results[check] for check in checks_physical),
+    }
+
+    return pb_results
 
 
 def compute_sa_score(mol: Mol) -> float:
