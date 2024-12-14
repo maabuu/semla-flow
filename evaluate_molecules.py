@@ -3,6 +3,7 @@
 import argparse
 import logging
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from copy import deepcopy
 from pathlib import Path
 from typing import Generator
 
@@ -12,12 +13,12 @@ from rdkit.Chem import QED, Crippen, Descriptors, Lipinski
 from rdkit.Chem.rdchem import Mol
 from rdkit.Chem.rdMolDescriptors import CalcNumRotatableBonds
 from rdkit.Chem.rdmolfiles import MolFromMolBlock, MolToSmiles
-from rdkit.Chem.rdmolops import SanitizeMol
 from rdkit.Chem.SpacialScore import SPS
 from rdkit.Contrib.SA_Score import sascorer
 from rdkit.rdBase import DisableLog
 from tqdm import tqdm
 
+DisableLog("rdApp.*")
 logger = logging.getLogger(__name__)
 buster = PoseBusters("mol")
 
@@ -35,7 +36,7 @@ def compute_novelty(smiles: list[str], training_smiles: set[str]) -> float:
 def compute_chemical_and_physical_validity(mol: Mol) -> dict[str, bool]:
     """Compute the chemical and physical validity of a molecule."""
 
-    results: dict[str, bool] = buster.bust(mol).iloc[0].to_dict()
+    results: dict[str, bool] = buster.bust(mol, full_report=True).iloc[0].to_dict()
 
     # group checks together
     check_connected = [
@@ -65,6 +66,9 @@ def compute_chemical_and_physical_validity(mol: Mol) -> dict[str, bool]:
         "physical",
         # "internal_steric_clash",
         # "internal_energy",
+        "ensemble_avg_energy",
+        "mol_pred_energy",
+        "energy_ratio",
     ]
 
     return {key: results[key] for key in chosen}
@@ -121,7 +125,6 @@ def compute_lipinski_score(mol: Mol) -> float:
     Paper reference: https://www.sciencedirect.com/science/article/pii/S0169409X00001290
     """
     try:
-        SanitizeMol(mol)
         rule_1 = Descriptors.ExactMolWt(mol) < 500
         rule_2 = Lipinski.NumHDonors(mol) <= 5
         rule_3 = Lipinski.NumHAcceptors(mol) <= 10
@@ -158,6 +161,10 @@ def evaluate_one(mol: Mol) -> dict[str, float]:
     metrics["qed"] = compute_qed_score(mol)
     metrics["logp"] = compute_logp(mol)
     metrics["lipinski"] = compute_lipinski_score(mol)
+    metrics["num_heavy"] = mol.GetNumHeavyAtoms()
+    metrics["weight"] = Descriptors.ExactMolWt(mol)
+    metrics["num_rings"] = mol.GetRingInfo().NumRings()
+    # metrics["num_stero_centers"] = mol.GetNumStereoCenters()
     return metrics
 
 
@@ -213,6 +220,9 @@ def evaluate(
             results.extend(future.result())
 
     results_df = pd.DataFrame.from_dict(results, orient="columns")
+
+    output_file = output_file or input_file.with_suffix(".csv")
+    results_df.to_csv(output_file, index=False)
 
     smiles = results_df.pop("smiles").tolist()
     training_smiles = set(training_smiles_file.read_text().split("\n"))
