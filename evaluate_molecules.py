@@ -7,10 +7,10 @@ from pathlib import Path
 from typing import Generator
 
 import pandas as pd
-from Chem.rdMolDescriptors import CalcNumRotatableBonds
 from posebusters import PoseBusters
 from rdkit.Chem import QED, Crippen, Descriptors, Lipinski
 from rdkit.Chem.rdchem import Mol
+from rdkit.Chem.rdMolDescriptors import CalcNumRotatableBonds
 from rdkit.Chem.rdmolfiles import MolFromMolBlock, MolToSmiles
 from rdkit.Chem.rdmolops import SanitizeMol
 from rdkit.Chem.SpacialScore import SPS
