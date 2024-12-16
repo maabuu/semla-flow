@@ -175,7 +175,10 @@ def evaluate_batch(mol_blocks: str) -> list[dict]:
 
     results = []
     for mol_block in mol_blocks.split("$$$$\n"):
-        mol = MolFromMolBlock(mol_block, sanitize=True)
+        try:
+            mol = MolFromMolBlock(mol_block, sanitize=True)
+        except Exception:
+            mol = None
         if mol is None:
             results.append({"fail": 1})
             continue
