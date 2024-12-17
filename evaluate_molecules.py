@@ -194,6 +194,10 @@ def evaluate_batch(mol_blocks: str) -> list[dict]:
             continue
         results.append(evaluate_one(mol))
         results[-1]["smiles"] = MolToSmiles(mol)
+        if mol.HasProp("_Name"):
+            results[-1]["name"] = mol.GetProp("_Name")
+        else:
+            results[-1]["name"] = ""
 
     return results
 
