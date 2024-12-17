@@ -242,6 +242,7 @@ def evaluate(
     results_df.to_csv(output_file, index=False)
 
     smiles = results_df.pop("smiles").tolist()
+    names = results_df.pop("name").tolist()
     training_smiles = set(training_smiles_file.read_text().split("\n"))
 
     metric_uniqueness = compute_uniquenss(smiles)
