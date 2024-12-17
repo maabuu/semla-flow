@@ -1,10 +1,15 @@
 # Basic Gitignore file
 
+# data files
+*.smol
+*.ckpt
+
 # Editors
 .vscode/
 
 # Jupyter notebook checkpoints
 notebooks/.ipynb_checkpoints/
+*notes*
 
 # Python cache files
 __pycache__/
