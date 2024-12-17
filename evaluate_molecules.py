@@ -2,6 +2,8 @@
 
 import argparse
 import logging
+import os
+import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from copy import deepcopy
 from pathlib import Path
@@ -14,9 +16,17 @@ from rdkit.Chem.rdchem import Mol
 from rdkit.Chem.rdMolDescriptors import CalcNumRotatableBonds
 from rdkit.Chem.rdmolfiles import MolFromMolBlock, MolToSmiles
 from rdkit.Chem.SpacialScore import SPS
-from rdkit.Contrib.SA_Score import sascorer
 from rdkit.rdBase import DisableLog
 from tqdm import tqdm
+
+try:
+    from rdkit.Contrib.SA_Score import sascorer
+except ImportError:
+    sys.path.append(
+        os.path.join(os.environ["CONDA_PREFIX"], "share", "RDKit", "Contrib")
+    )
+    from SA_Score import sascorer
+
 
 DisableLog("rdApp.*")
 logger = logging.getLogger(__name__)
