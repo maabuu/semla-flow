@@ -4,6 +4,8 @@
 datasets/
 wandb/
 output/
+plots/
+predictions/
 
 # shared outside of repo
 predictions/
