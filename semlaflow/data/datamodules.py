@@ -178,6 +178,7 @@ class GeometricDM(SmolDM):
             return self._batch_to_dict(batch)
 
         elif isinstance(batch[0], GeometricMol):
+            return batch
             smol_batch = GeometricMolBatch.from_list(list(batch))
             return self._batch_to_dict(smol_batch)
 
@@ -217,6 +218,11 @@ class GeometricDM(SmolDM):
         bonds = batch.adjacency.float()[1:]
         charges = batch.charges.long()[1:]
         mask = batch.mask.long()[1:]
+        # Check if frag_mask exists and process if it does
+        frag_mask = None
+        if hasattr(batch, "frag_mask") and batch.frag_mask is not None:
+            frag_mask = batch.frag_mask.long()[1:]
+
 
         # Assume that charges have already been transformed to indices
         if charges is not None:
@@ -230,6 +236,10 @@ class GeometricDM(SmolDM):
             "charges": charges,
             "mask": mask
         }
+
+        if frag_mask is not None:
+            data["frag_mask"] = frag_mask
+
         return data
 
     def _get_padded_size(self, smol_batch):
@@ -325,7 +335,7 @@ class GeometricInterpolantDM(GeometricDM):
 
         elif dataset == "edit" and self.edit_interpolant is not None:
             batch = [batch[0] for _ in range(self.batch_cost)]
-            objs = self.edit_interpolant.interpolate(batch)
-            batch = list(zip(*objs))
+            # objs = self.edit_interpolant.interpolate(batch)
+            # batch = list(zip(*objs))
 
         return super()._collate(batch, dataset)

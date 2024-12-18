@@ -15,7 +15,7 @@ import semlaflow.util.functional as smolF
 from semlaflow.util.tokeniser import Vocabulary
 from semlaflow.util.molrepr import GeometricMol
 from semlaflow.models.semla import MolecularGenerator
-
+from semlaflow.data.datamodules import *
 
 _T = torch.Tensor
 _BatchT = dict[str, _T]
@@ -909,6 +909,99 @@ class MolecularCFM(L.LightningModule):
         predicted["coords"] = predicted["coords"] * self.coord_scale
         return predicted
 
+    def _replacment_guidance(self, batch, steps, merge_interpolant, strategy="linear"):
+
+
+        batch_size = len(batch)
+        num_atoms = max([mol.seq_length for mol in batch])
+
+        from_mols = [merge_interpolant.prior_sampler.sample_molecule(num_atoms) for _ in batch]
+        from_mols = [merge_interpolant._match_mols(from_mol, to_mol) for from_mol, to_mol in zip(from_mols, batch)]
+
+        smol_batch = GeometricMolBatch.from_list(from_mols)
+        geom = GeometricDM(None, None, None, None, batch_size)
+        prior = geom._batch_to_dict(smol_batch)
+
+        smol_batch = GeometricMolBatch.from_list(batch)
+        data = geom._batch_to_dict(smol_batch)
+
+        if strategy == "linear":
+            time_points = np.linspace(0, 1, steps + 1).tolist()
+
+        elif strategy == "log":
+            time_points = (1 - np.geomspace(0.01, 1.0, steps + 1)).tolist()
+            time_points.reverse()
+
+        else:
+            raise ValueError(f"Unknown ODE integration strategy '{strategy}'")
+
+        times = torch.zeros(batch_size, device=self.device)
+        step_sizes = [t1 - t0 for t0, t1 in zip(time_points[:-1], time_points[1:])]
+        # Start the loop from denoise_steps
+
+        curr = {k: v.clone() for k, v in prior.items()}
+
+        cond_batch = {
+            "coords": torch.zeros_like(prior["coords"]),
+            "atomics": torch.zeros_like(prior["atomics"]),
+            "bonds": torch.zeros_like(prior["bonds"])
+        }
+
+        frag_mask = torch.stack([mol.frag_mask for mol in batch])
+        pairwise_mask = frag_mask.unsqueeze(1) & frag_mask.unsqueeze(2)  # Shape: (10, 29, 29)
+        # pairwise_mask = pairwise_mask.view(frag_mask.size(0), -1)
+
+
+        with torch.no_grad():
+            for step_size in step_sizes:
+
+                cond = cond_batch if self.self_condition else None
+
+                coords, type_logits, bond_logits, charge_logits = self(curr, times, training=False, cond_batch=cond)
+
+                type_probs = F.softmax(type_logits, dim=-1)
+                bond_probs = F.softmax(bond_logits, dim=-1)
+                charge_probs = F.softmax(charge_logits, dim=-1)
+
+                cond_batch = {
+                    "coords": coords,
+                    "atomics": type_probs,
+                    "bonds": bond_probs
+                }
+                predicted = {
+                    "coords": coords,
+                    "atomics": type_probs,
+                    "bonds": bond_probs,
+                    "charges": charge_probs,
+                    "mask": curr["mask"]
+                }
+
+                curr = self.integrator.step(curr, predicted, prior, times, step_size)
+
+                if times[0]<0.95:
+                # tuples = zip(from_mols, batch, times.tolist())
+                # interp_mols = [merge_interpolant._interpolate_mol(from_mol, to_mol, t) for from_mol, to_mol, t in tuples]
+                # interp_smol_batch = GeometricMolBatch.from_list(interp_mols)
+                # interpolated = geom._batch_to_dict(interp_smol_batch)
+                #
+                # curr["coords"] = torch.where(frag_mask.unsqueeze(-1), interpolated["coords"], curr["coords"])
+                # curr["atomics"] = torch.where(frag_mask.unsqueeze(-1), interpolated["atomics"], curr["atomics"])
+                # curr["bonds"] = torch.where(pairwise_mask.unsqueeze(-1), interpolated["bonds"], curr["bonds"])
+                # else:
+                    curr["coords"] = torch.where(frag_mask.unsqueeze(-1), data["coords"], curr["coords"])
+                    curr["atomics"] = torch.where(frag_mask.unsqueeze(-1), data["atomics"], curr["atomics"])
+                    curr["bonds"] = torch.where(pairwise_mask.unsqueeze(-1), data["bonds"], curr["bonds"])
+
+
+                times = times + step_size
+
+        predicted["coords"] = predicted["coords"] * self.coord_scale
+
+        # smol_batch = GeometricMolBatch.from_list(batch)
+        # predicted = geom._batch_to_dict(smol_batch)
+        return predicted
+
+
     def _interpolate_predict(self, batch, steps, denoise_steps= 50, sigma = 0.1, strategy="linear"):
         prior, data, interpolated, times = batch
 
@@ -1020,7 +1113,7 @@ class MolecularCFM(L.LightningModule):
         predicted["coords"] = predicted["coords"] * self.coord_scale
         return predicted
 
-    def _generate_mols(self, generated, sanitise=True):
+    def _generate_mols(self, generated, sanitise=True, name = None):
         coords = generated["coords"]
         atom_dists = generated["atomics"]
         bond_dists = generated["bonds"]
@@ -1035,6 +1128,11 @@ class MolecularCFM(L.LightningModule):
             charge_dists=charge_dists,
             sanitise=sanitise
         )
+
+        if name is not None:
+            for mol in mols:
+                if mol is not None:
+                    mol.SetProp("_Name", name)
         return mols
 
     def _generate_stabilities(self, generated):

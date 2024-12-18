@@ -72,9 +72,9 @@ def configure_fs(limit=4096):
 # 5. Creates a one-hot vector for the bond type for every possible bond
 # 6. Encodes charges as non-negative numbers according to encoding map
 def mol_transform(molecule, vocab, n_bonds, coord_std):
-    rotation = tuple(np.random.rand(3) * np.pi * 2)
-    molecule = molecule.scale(1.0 / coord_std).rotate(rotation).zero_com()
-
+    # rotation = tuple(np.random.rand(3) * np.pi * 2)
+    # molecule = molecule.scale(1.0 / coord_std).rotate(rotation).zero_com()
+    molecule = molecule.scale(1.0 / coord_std).zero_com()
     atomic_nums = [int(atomic) for atomic in molecule.atomics.tolist()]
     tokens = [smolRD.PT.symbol_from_atomic(atomic) for atomic in atomic_nums]
     one_hot_atomics = torch.tensor(vocab.indices_from_tokens(tokens, one_hot=True))
@@ -87,7 +87,37 @@ def mol_transform(molecule, vocab, n_bonds, coord_std):
     transformed = molecule._copy_with(atomics=one_hot_atomics, bond_types=bond_types, charges=charge_idxs)
     return transformed
 
+def frag_transform(molecule, vocab, n_bonds, coord_std):
+    frag_mask = molecule.frag_mask
+    atomics = molecule.atomics[frag_mask]
+    coords = molecule.coords[frag_mask]
+    rotation = tuple(np.random.rand(3) * np.pi * 2)
 
+    atomics = molecule.atomics[frag_mask]
+
+    # Apply transformations
+    transformed_coords = coords / coord_std
+    # transformed_coords = smolF.rotate(transformed_coords, rotation)
+    # transformed_coords -= transformed_coords.mean(dim=0)
+    coords = molecule.coords
+    coords[frag_mask] = transformed_coords.float()
+    # molecule = molecule.scale(1.0 / coord_std).rotate(rotation).zero_com()
+
+    atomic_nums = [int(atomic) for atomic in atomics.tolist()]
+    tokens = [smolRD.PT.symbol_from_atomic(atomic) for atomic in atomic_nums]
+    one_hot_atomics = torch.tensor(vocab.indices_from_tokens(tokens, one_hot=True))
+
+    padding_size = (~frag_mask).sum().item()
+    padding_atomics = torch.zeros((padding_size, one_hot_atomics.shape[1]))
+    one_hot_atomics = torch.cat([one_hot_atomics, padding_atomics], dim=0)
+
+    bond_types = smolF.one_hot_encode_tensor(molecule.bond_types, n_bonds)
+
+    charge_idxs = [smolRD.CHARGE_IDX_MAP[charge] for charge in molecule.charges.tolist()]
+    charge_idxs = torch.tensor(charge_idxs)
+
+    transformed = molecule._copy_with(coords = coords, atomics=one_hot_atomics, bond_types=bond_types, charges=charge_idxs)
+    return transformed
 # When training a distilled model atom types and bonds are already distributions over categoricals
 def distill_transform(molecule, coord_std):
     rotation = tuple(np.random.rand(3) * np.pi * 2)
@@ -183,14 +213,39 @@ def generate_similar_molecules(model, dm, steps, denoise_steps,sigma, strategy, 
     cuda_model = model.to("cpu")
 
     outputs = []
-    for batch in tqdm(edit_dl):
+    molecules = []
+    for batch_idx, batch in enumerate(tqdm(edit_dl)):
+        name = f"reference_{batch_idx}"
         if len(batch[0]) == 0:  # Skip empty batches
             continue
 
         output = cuda_model._interpolate_predict(batch, steps, denoise_steps= denoise_steps, sigma=sigma, strategy = strategy)
         outputs.append(output)
+        molecules.append(cuda_model._generate_mols(output, name = name))
 
-    molecules = [cuda_model._generate_mols(output) for output in outputs]
+    molecules = [mol for mol_list in molecules for mol in mol_list]
+
+    if not stabilities:
+        return molecules, outputs
+
+    stabilities = [cuda_model._generate_stabilities(output) for output in outputs]
+    stabilities = [mol_stab for mol_stabs in stabilities for mol_stab in mol_stabs]
+    return molecules, outputs, stabilities
+
+def merge_fragments(model, dm, steps, merge_interpolant, strategy, stabilities=False):
+    edit_dl = dm.edit_dataloader()
+    model.eval()
+    cuda_model = model.to("cpu")
+
+    molecules = []
+    outputs = []
+    for batch_idx, batch in enumerate(tqdm(edit_dl)):
+        name = f"reference_{batch_idx}"
+
+        output = cuda_model._replacment_guidance(batch, steps, merge_interpolant = merge_interpolant, strategy = strategy)
+        outputs.append(output)
+        molecules.append(cuda_model._generate_mols(output, name = name))
+
     molecules = [mol for mol_list in molecules for mol in mol_list]
 
     if not stabilities:

@@ -57,8 +57,12 @@ class SmolDataset(ABC, torch.utils.data.Dataset):
 # *** SmolDataset implementations ***
 
 class GeometricDataset(SmolDataset):
-    def sample(self, n_items, replacement=False):
-        mol_samples = np.random.choice(self._data.to_list(), n_items, replace=replacement)
+    def sample(self, n_items, replacement=False, fixed_indices=False):
+        if fixed_indices:
+            indices = list(range(n_items))
+            mol_samples = [self._data.to_list()[i] for i in indices]
+        else:
+            mol_samples = np.random.choice(self._data.to_list(), n_items, replace=replacement)
         data = GeometricMolBatch.from_list(mol_samples)
         return GeometricDataset(data, transform=self.transform)
 

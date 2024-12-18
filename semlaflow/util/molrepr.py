@@ -280,7 +280,8 @@ class GeometricMol(SmolMol):
         charges: Optional[_T] = None,
         device: Optional[TDevice] = None,
         is_mmap: bool = False,
-        str_id: Optional[str] = None
+        str_id: Optional[str] = None,
+        frag_mask: Optional[str] = None
     ):
         # Check that each tensor has correct number of dimensions
         _check_shape_len(coords, 2, "coords")
@@ -316,6 +317,10 @@ class GeometricMol(SmolMol):
         self._charges = charges
         self._device = device
 
+        if frag_mask is None:
+            frag_mask = torch.ones(coords.size(0), dtype=torch.bool)
+        self._frag_mask = frag_mask.to(device)
+
         # If the data are not stored in mmap tensors, then convert to expected type and move to device
         if not is_mmap:
             # Use float if atomics is a distribution over atomic numbers
@@ -331,7 +336,10 @@ class GeometricMol(SmolMol):
 
 
     # *** General Properties ***
-
+    # Mask property
+    @property
+    def frag_mask(self) -> _T:
+        return self._frag_mask
     @property
     def device(self) -> torch.device:
         return self._device
@@ -414,6 +422,11 @@ class GeometricMol(SmolMol):
             bond_indices = bonds[:, :2]
             bond_types = bonds[:, 2]
 
+        if obj.get("frag_mask") is not None:
+            frag_mask = obj["frag_mask"]
+        else:
+            frag_mask = None
+
         mol = GeometricMol(
             obj["coords"],
             obj["atomics"],
@@ -422,7 +435,8 @@ class GeometricMol(SmolMol):
             charges=obj["charges"],
             device=obj["device"],
             is_mmap=False,
-            str_id=obj["id"]
+            str_id=obj["id"],
+            frag_mask=frag_mask
         )
         return mol
 
@@ -463,6 +477,56 @@ class GeometricMol(SmolMol):
         mol = GeometricMol(coords, atomics, bond_indices, bond_types, charges=charges, str_id=smiles)
         return mol
 
+    @staticmethod
+    def pad_molecule(molecule: GeometricMol, target_size: int) -> GeometricMol:
+        """
+        Pads a GeometricMol to match the target size in terms of atoms.
+        Adds zeros to atomics, charges, coordinates, and bonds.
+        """
+        current_size = molecule.coords.shape[0]
+
+        # No padding needed
+        if current_size >= target_size:
+            mask = torch.ones(current_size, dtype=torch.bool)
+            return molecule._copy_with(frag_mask=mask)
+
+        padding_size = (target_size - current_size)
+        # Create padding
+        padding_coords = torch.zeros((padding_size, molecule.coords.shape[1]))
+        coords = torch.cat([molecule.coords, padding_coords], dim=0)
+
+        padding_atomics = torch.zeros(padding_size, dtype=torch.long)
+        atomics = torch.cat([molecule.atomics, padding_atomics], dim=0)
+
+        padding_charges = torch.zeros(padding_size, dtype=torch.long)
+        charges = torch.cat([molecule.charges, padding_charges], dim=0)
+
+        # Pad bond indices
+        num_existing_bonds = molecule.bond_indices.shape[0]
+        bond_padding_size = padding_size
+
+        if num_existing_bonds > 0:
+            bond_indices_padding = torch.zeros((bond_padding_size, molecule.bond_indices.shape[1]), dtype=torch.long)
+            bond_indices = torch.cat([molecule.bond_indices, bond_indices_padding], dim=0)
+
+            bond_types_padding = torch.zeros((bond_padding_size), dtype=torch.float)
+            bond_types = torch.cat([molecule.bond_types, bond_types_padding], dim=0)
+        else:
+            bond_indices = torch.zeros((bond_padding_size, 2), dtype=torch.long)
+            bond_types = torch.zeros((bond_padding_size, 1), dtype=torch.float)
+
+        # bond_indices = molecule.bond_indices
+        # bond_types = molecule.bond_types
+
+        # Create the mask field
+        frag_mask = torch.cat(
+            [torch.ones(current_size, dtype=torch.bool), torch.zeros(padding_size, dtype=torch.bool)],
+            dim=0)
+
+        # Return the padded molecule with mask
+        return molecule._copy_with(coords=coords, atomics=atomics, bond_indices=bond_indices, bond_types=bond_types,
+                                   charges=charges, frag_mask=frag_mask)
+
     def to_bytes(self) -> bytes:
         dict_repr = {
             "coords": self.coords,
@@ -471,7 +535,8 @@ class GeometricMol(SmolMol):
             "bond_types": self.bond_types,
             "charges": self.charges,
             "device": str(self.device),
-            "id": self._str_id
+            "id": self._str_id,
+            "frag_mask":self.frag_mask
         }
         byte_obj = pickle.dumps(dict_repr, protocol=PICKLE_PROTOCOL)
         return byte_obj
@@ -498,7 +563,8 @@ class GeometricMol(SmolMol):
         atomics: Optional[_T] = None,
         bond_indices: Optional[_T] = None,
         bond_types: Optional[_T] = None,
-        charges: Optional[_T] = None
+        charges: Optional[_T] = None,
+        frag_mask: Optional[_T] = None
     ) -> GeometricMol:
 
         coords = self.coords if coords is None else coords
@@ -506,6 +572,7 @@ class GeometricMol(SmolMol):
         bond_indices = self.bond_indices if bond_indices is None else bond_indices
         bond_types = self.bond_types if bond_types is None else bond_types
         charges = self.charges if charges is None else charges
+        frag_mask = self.frag_mask if frag_mask is None else frag_mask
 
         obj = GeometricMol(
             coords,
@@ -515,7 +582,8 @@ class GeometricMol(SmolMol):
             charges=charges,
             device=self.device,
             is_mmap=False,
-            str_id=self._str_id
+            str_id=self._str_id,
+            frag_mask=frag_mask
         )
         return obj
 
@@ -602,6 +670,14 @@ class GeometricMolBatch(SmolBatch[GeometricMol]):
 
     # *** General Properties ***
 
+    @property
+    def frag_mask(self) -> _T:
+        """Fragment-specific mask."""
+        if self._frag_mask is None:
+            masks = [mol.frag_mask for mol in self._mols]
+            self._frag_mask = smolF.pad_tensors(masks)
+
+        return self._frag_mask
     @property
     def mask(self) -> _T:
         if self._mask is None:
