@@ -1,11 +1,10 @@
-"""Evaluate a set of generated molecules."""
+"""Evaluate generated molecules individually."""
 
 import argparse
 import logging
 import os
 import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from copy import deepcopy
 from pathlib import Path
 from typing import Generator
 
@@ -193,7 +192,10 @@ def evaluate_batch(mol_blocks: str) -> list[dict]:
             results.append({"fail": 1})
             continue
         results.append(evaluate_one(mol))
-        results[-1]["smiles"] = MolToSmiles(mol)
+        try:
+            results[-1]["smiles"] = MolToSmiles(mol)
+        except:
+            results[-1]["smiles"] = ""
         if mol.HasProp("_Name"):
             results[-1]["name"] = mol.GetProp("_Name")
         else:
