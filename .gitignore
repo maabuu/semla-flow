@@ -6,6 +6,8 @@ wandb/
 output/
 plots/
 predictions/
+evaluation/
+slurm/
 
 # shared outside of repo
 predictions/
