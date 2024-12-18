@@ -8,12 +8,14 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from typing import Generator
 
+import numpy as np
 import pandas as pd
 from posebusters import PoseBusters
 from rdkit.Chem import QED, Crippen, Descriptors, Lipinski
 from rdkit.Chem.rdchem import Mol
 from rdkit.Chem.rdMolDescriptors import CalcNumRotatableBonds
 from rdkit.Chem.rdmolfiles import MolFromMolBlock, MolToSmiles
+from rdkit.Chem.rdmolops import AddHs
 from rdkit.Chem.SpacialScore import SPS
 from rdkit.rdBase import DisableLog
 from tqdm import tqdm
@@ -34,12 +36,14 @@ buster = PoseBusters("mol")
 
 def compute_uniquenss(smiles: list[str]) -> float:
     """Compute the uniqueness of a list of SMILES strings."""
-    return len(set(smiles)) / len(smiles)
+    valid_smiles = [s for s in smiles if s not in {None, "", pd.NA, np.nan}]
+    return len(set(valid_smiles)) / len(valid_smiles)
 
 
 def compute_novelty(smiles: list[str], training_smiles: set[str]) -> float:
     """Compute the novelty of a list of SMILES strings."""
-    return len(set(smiles) - training_smiles) / len(smiles)
+    valid_smiles = [s for s in smiles if s not in {None, "", pd.NA, np.nan}]
+    return len(set(valid_smiles) - training_smiles) / len(valid_smiles)
 
 
 def compute_chemical_and_physical_validity(mol: Mol) -> dict[str, bool]:
@@ -183,9 +187,11 @@ def evaluate_batch(mol_blocks: str) -> list[dict]:
     DisableLog("rdApp.*")
 
     results = []
+    # TODO: fix bug as this seems to add invalid molecule blocks
     for mol_block in mol_blocks.split("$$$$\n"):
         try:
             mol = MolFromMolBlock(mol_block, sanitize=True)
+            mol = AddHs(mol, addCoords=True)
         except Exception:
             mol = None
         if mol is None:
@@ -193,7 +199,9 @@ def evaluate_batch(mol_blocks: str) -> list[dict]:
             continue
         results.append(evaluate_one(mol))
         try:
-            results[-1]["smiles"] = MolToSmiles(mol)
+            results[-1]["smiles"] = MolToSmiles(
+                mol, canonical=True, allHsExplicit=False
+            )
         except:
             results[-1]["smiles"] = ""
         if mol.HasProp("_Name"):
