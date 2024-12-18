@@ -19,7 +19,7 @@ from semlaflow.models.semla import EquiInvDynamics, SemlaGenerator
 
 from semlaflow.data.datasets import GeometricDataset
 from semlaflow.data.datamodules import GeometricInterpolantDM
-from semlaflow.data.interpolate import GeometricInterpolant, GeometricNoiseSampler, MergeGeometricInterpolant
+from semlaflow.data.interpolate import GeometricInterpolant, GeometricNoiseSampler
 from semlaflow.util.rdkit import write_mols_to_sdf
 import numpy as np
 
@@ -177,7 +177,7 @@ def build_dm(args, hparams, vocab):
         type_mask_index=type_mask_index,
         bond_mask_index=bond_mask_index
     )
-    eval_interpolant = MergeGeometricInterpolant(
+    eval_interpolant = GeometricInterpolant(
         prior_sampler,
         coord_interpolation="linear",
         type_interpolation=hparams["val-type-interpolation"],
@@ -195,7 +195,8 @@ def build_dm(args, hparams, vocab):
         edit_interpolant=eval_interpolant,
         bucket_limits=bucket_limits,
         bucket_cost_scale=args.bucket_cost_scale,
-        pad_to_bucket=False
+        pad_to_bucket=False,
+        merge=True
     )
     return dm, eval_interpolant
 

@@ -21,7 +21,8 @@ class SmolDM(L.LightningDataModule):
         batch_cost,
         bucket_limits=None,
         bucket_cost_scale="constant",
-        pad_to_bucket=False
+        pad_to_bucket=False,
+        merge = False
     ):
         super().__init__()
 
@@ -55,6 +56,7 @@ class SmolDM(L.LightningDataModule):
         self.bucket_limits = bucket_limits
         self.bucket_cost_scale = bucket_cost_scale
         self.pad_to_bucket = pad_to_bucket
+        self.merge = merge
 
     @property
     def hparams(self):
@@ -177,8 +179,10 @@ class GeometricDM(SmolDM):
         if isinstance(batch, GeometricMolBatch):
             return self._batch_to_dict(batch)
 
-        elif isinstance(batch[0], GeometricMol):
+        elif isinstance(batch[0], GeometricMol) and self.merge:
             return batch
+
+        elif isinstance(batch[0], GeometricMol):
             smol_batch = GeometricMolBatch.from_list(list(batch))
             return self._batch_to_dict(smol_batch)
 
@@ -285,6 +289,7 @@ class GeometricInterpolantDM(GeometricDM):
         bucket_limits=None,
         bucket_cost_scale=None,
         pad_to_bucket=False,
+        merge = False
     ):
 
         self.train_interpolant = train_interpolant
@@ -300,7 +305,8 @@ class GeometricInterpolantDM(GeometricDM):
             batch_size,
             bucket_limits=bucket_limits,
             bucket_cost_scale=bucket_cost_scale,
-            pad_to_bucket=pad_to_bucket
+            pad_to_bucket=pad_to_bucket,
+            merge = merge
         )
 
     @property
