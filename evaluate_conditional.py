@@ -21,6 +21,7 @@ from rdkit.DataStructs import TanimotoSimilarity
 from rdkit.rdBase import DisableLog
 from tqdm import tqdm
 
+logger = logging.getLogger(__name__)
 fpgen = GetMorganGenerator(radius=2)
 
 
@@ -36,14 +37,31 @@ def compute_sucos_score(mol_pred: Mol, mol_cond: Mol) -> float:
     return get_sucos_score(mol_pred, mol_cond)
 
 
+def compute_smiles(mol: Mol) -> str:
+    """Compute the SMILES string of a molecule."""
+    try:
+        return MolToSmiles(mol, canonical=True, allHsExplicit=False)
+    except Exception:
+        return ""
+
+
+def get_name(mol: Mol) -> str:
+    """Get the name of a molecule."""
+    if not hasattr(mol, "HasProp"):
+        return ""
+    if mol.HasProp("_Name"):
+        return mol.GetProp("_Name")
+    return ""
+
+
 def evaluate_pair(mol_pred: Mol, mol_cond: Mol, name: str) -> dict[str, float]:
     """Evaluate a pair of molecules."""
     results = {}
     try:
         results["tanimoto"] = compute_ecfp4_tanimoto(mol_pred, mol_cond)
         results["sucos"] = compute_sucos_score(mol_pred, mol_cond)
-        results["smiles_pred"] = MolToSmiles(mol_pred)
-        results["smiles_cond"] = MolToSmiles(mol_cond)
+        results["smiles_pred"] = compute_smiles(mol_pred)
+        results["smiles_cond"] = compute_smiles(mol_cond)
         results["Reference molecule"] = name
     except Exception as e:
         results["Error"] = str(e)
@@ -79,10 +97,10 @@ def evaluate(predicted: Path, conditional: Path, output: Path | None = None):
         i = 0
         for mol_pred in tqdm(supplier, desc="Submitting jobs"):
             i += 1
-            try:
-                name = mol_pred.GetProp("_Name")
-            except:
-                pass
+            name = get_name(mol_pred)
+            if name == "":
+                logger.warning("No name found for molecule")
+                continue
             id_cond = int(name.split("_")[-1])
             mol_cond = mols_cond[id_cond]
             future = executor.submit(evaluate_pair, mol_pred, mol_cond, name)

@@ -149,6 +149,23 @@ def compute_lipinski_score(mol: Mol) -> float:
         return float("nan")
 
 
+def compute_smiles(mol: Mol) -> str:
+    """Compute the SMILES string of a molecule."""
+    try:
+        return MolToSmiles(mol, canonical=True, allHsExplicit=False)
+    except Exception:
+        return ""
+
+
+def get_name(mol: Mol) -> str:
+    """Get the name of a molecule."""
+    if not hasattr(mol, "HasProp"):
+        return ""
+    if mol.HasProp("_Name"):
+        return mol.GetProp("_Name")
+    return ""
+
+
 def parse_arguments() -> argparse.Namespace:
     """Parse command line arguments."""
 
@@ -198,16 +215,8 @@ def evaluate_batch(mol_blocks: str) -> list[dict]:
             results.append({"fail": 1})
             continue
         results.append(evaluate_one(mol))
-        try:
-            results[-1]["smiles"] = MolToSmiles(
-                mol, canonical=True, allHsExplicit=False
-            )
-        except:
-            results[-1]["smiles"] = ""
-        if mol.HasProp("_Name"):
-            results[-1]["name"] = mol.GetProp("_Name")
-        else:
-            results[-1]["name"] = ""
+        results[-1]["smiles"] = compute_smiles(mol)
+        results[-1]["name"] = get_name(mol)
 
     return results
 
