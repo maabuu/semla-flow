@@ -15,7 +15,7 @@ from rdkit.Chem import QED, Crippen, Descriptors, Lipinski
 from rdkit.Chem.rdchem import Mol
 from rdkit.Chem.rdMolDescriptors import CalcNumRotatableBonds
 from rdkit.Chem.rdmolfiles import MolFromMolBlock, MolToSmiles
-from rdkit.Chem.rdmolops import AddHs
+from rdkit.Chem.rdmolops import AddHs, RemoveHs
 from rdkit.Chem.SpacialScore import SPS
 from rdkit.rdBase import DisableLog
 from tqdm import tqdm
@@ -34,16 +34,33 @@ logger = logging.getLogger(__name__)
 buster = PoseBusters("mol")
 
 
+def compute_smiles(mol: Mol) -> str:
+    """Compute the SMILES string of a molecule."""
+    try:
+        return MolToSmiles(RemoveHs(mol), canonical=True, allHsExplicit=False)
+    except Exception:
+        return ""
+
+
+def get_name(mol: Mol) -> str:
+    """Get the name of a molecule."""
+    if not hasattr(mol, "HasProp"):
+        return ""
+    if mol.HasProp("_Name"):
+        return mol.GetProp("_Name")
+    return ""
+
+
 def compute_uniquenss(smiles: list[str]) -> float:
     """Compute the uniqueness of a list of SMILES strings."""
-    valid_smiles = [s for s in smiles if s not in {None, "", pd.NA, np.nan}]
+    valid_smiles = [s for s in smiles if s not in {None, "", pd.NA, np.nan}]  # list
     return len(set(valid_smiles)) / len(valid_smiles)
 
 
 def compute_novelty(smiles: list[str], training_smiles: set[str]) -> float:
     """Compute the novelty of a list of SMILES strings."""
-    valid_smiles = [s for s in smiles if s not in {None, "", pd.NA, np.nan}]
-    return len(set(valid_smiles) - training_smiles) / len(valid_smiles)
+    valid_smiles = set(s for s in smiles if s not in {None, "", pd.NA, np.nan})  # set
+    return len(valid_smiles - training_smiles) / len(valid_smiles)
 
 
 def compute_chemical_and_physical_validity(mol: Mol) -> dict[str, bool]:
@@ -149,23 +166,6 @@ def compute_lipinski_score(mol: Mol) -> float:
         return float("nan")
 
 
-def compute_smiles(mol: Mol) -> str:
-    """Compute the SMILES string of a molecule."""
-    try:
-        return MolToSmiles(mol, canonical=True, allHsExplicit=False)
-    except Exception:
-        return ""
-
-
-def get_name(mol: Mol) -> str:
-    """Get the name of a molecule."""
-    if not hasattr(mol, "HasProp"):
-        return ""
-    if mol.HasProp("_Name"):
-        return mol.GetProp("_Name")
-    return ""
-
-
 def parse_arguments() -> argparse.Namespace:
     """Parse command line arguments."""
 
@@ -173,7 +173,7 @@ def parse_arguments() -> argparse.Namespace:
     help_line = "Path to SDF file containing predicted molecules."
     parser.add_argument("predicted", type=Path, help=help_line)
     help_line = "File containing SMILES strings for molecules in training set."
-    default = Path(__file__).parent / "training_smiles.txt"
+    default = Path(__file__).parent / "data/unconditional/geom-drugs/train.smiles"
     parser.add_argument("--training", type=Path, help=help_line, default=default)
     help_line = "Output file."
     parser.add_argument("--output", "-o", type=Path, help=help_line)

@@ -2,45 +2,48 @@
 
 import argparse
 import logging
-import os
-import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
-from typing import Generator
 
 import pandas as pd
-from posebusters import PoseBusters
 from posebusters.modules.sucos import get_sucos_score
-from rdkit.Chem import QED, Crippen, Descriptors, Lipinski
+from rdkit.Chem import AllChem, RemoveStereochemistry
 from rdkit.Chem.AllChem import GetMorganGenerator
 from rdkit.Chem.rdchem import Mol
-from rdkit.Chem.rdMolDescriptors import CalcNumRotatableBonds
-from rdkit.Chem.rdmolfiles import MolFromMolBlock, MolToSmiles, SDMolSupplier
-from rdkit.Chem.SpacialScore import SPS
+from rdkit.Chem.rdmolfiles import MolFromSmarts, MolToSmiles, SDMolSupplier
+from rdkit.Chem.rdmolops import RemoveHs
+from rdkit.Chem.Scaffolds import MurckoScaffold
 from rdkit.DataStructs import TanimotoSimilarity
 from rdkit.rdBase import DisableLog
 from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
-fpgen = GetMorganGenerator(radius=2)
+ecfp4_generator = GetMorganGenerator(radius=2)
+
+PATT = MolFromSmarts("[$([D1]=[*])]")
+REPL = MolFromSmarts("[*]")
 
 
-def compute_ecfp4_tanimoto(mol_pred: Mol, mol_cond: Mol) -> float:
-    """Compute the ECFP4 Tanimoto similarity between two molecules."""
-    fingerprint_pred = fpgen.GetSparseCountFingerprint(mol_pred)
-    fingerprint_cond = fpgen.GetSparseCountFingerprint(mol_cond)
-    return TanimotoSimilarity(fingerprint_pred, fingerprint_cond)
-
-
-def compute_sucos_score(mol_pred: Mol, mol_cond: Mol) -> float:
-    """Compute the SuCOS score between two molecules."""
-    return get_sucos_score(mol_pred, mol_cond)
+def get_scaffold(mol, real_bm=True, use_csk=False, use_bajorath=False):
+    """Get the scaffold of a molecule."""
+    # code from https://github.com/rdkit/rdkit/discussions/6844
+    RemoveStereochemistry(mol)  # important for canonization of CSK!
+    scaffold = MurckoScaffold.GetScaffoldForMol(mol)
+    if use_bajorath:
+        scaffold = AllChem.DeleteSubstructs(scaffold, PATT)
+    if real_bm:
+        scaffold = AllChem.ReplaceSubstructs(scaffold, PATT, REPL, replaceAll=True)[0]
+    if use_csk:
+        scaffold = MurckoScaffold.MakeScaffoldGeneric(scaffold)
+        if real_bm:
+            scaffold = MurckoScaffold.GetScaffoldForMol(scaffold)
+    return scaffold
 
 
 def compute_smiles(mol: Mol) -> str:
     """Compute the SMILES string of a molecule."""
     try:
-        return MolToSmiles(mol, canonical=True, allHsExplicit=False)
+        return MolToSmiles(RemoveHs(mol), canonical=True, allHsExplicit=False)
     except Exception:
         return ""
 
@@ -54,14 +57,47 @@ def get_name(mol: Mol) -> str:
     return ""
 
 
+def compute_ecfp4_tanimoto(mol_pred: Mol, mol_cond: Mol) -> float:
+    """Compute the ECFP4 Tanimoto similarity between two molecules."""
+    fingerprint_pred = ecfp4_generator.GetSparseCountFingerprint(mol_pred)
+    fingerprint_cond = ecfp4_generator.GetSparseCountFingerprint(mol_cond)
+    return TanimotoSimilarity(fingerprint_pred, fingerprint_cond)
+
+
+def compute_sucos_score(mol_pred: Mol, mol_cond: Mol) -> float:
+    """Compute the SuCOS score between two molecules."""
+    return get_sucos_score(mol_pred, mol_cond)
+
+
+def compare_rdkit_csk_scaffolds(mol_pred: Mol, mol_cond: Mol) -> bool:
+    """Check whether molecules share the same scaffold."""
+
+    scaffold_pred = MolToSmiles(get_scaffold(mol_pred, real_bm=False, use_csk=True))
+    scaffold_cond = MolToSmiles(get_scaffold(mol_cond, real_bm=False, use_csk=True))
+    return scaffold_pred == scaffold_cond
+
+
+def compare_true_csk_scaffolds(mol_pred: Mol, mol_cond: Mol) -> bool:
+    """Check whether molecules share the same scaffold."""
+
+    scaffold_pred = MolToSmiles(get_scaffold(mol_pred, real_bm=True, use_csk=True))
+    scaffold_cond = MolToSmiles(get_scaffold(mol_cond, real_bm=True, use_csk=True))
+    return scaffold_pred == scaffold_cond
+
+
 def evaluate_pair(mol_pred: Mol, mol_cond: Mol, name: str) -> dict[str, float]:
     """Evaluate a pair of molecules."""
+
     results = {}
     try:
         results["tanimoto"] = compute_ecfp4_tanimoto(mol_pred, mol_cond)
         results["sucos"] = compute_sucos_score(mol_pred, mol_cond)
+        results["scaffold_true_csk"] = compare_true_csk_scaffolds(mol_pred, mol_cond)
+        results["scaffold_rdkit_csk"] = compare_rdkit_csk_scaffolds(mol_pred, mol_cond)
         results["smiles_pred"] = compute_smiles(mol_pred)
         results["smiles_cond"] = compute_smiles(mol_cond)
+        results["num_atoms_pred"] = mol_pred.GetNumHeavyAtoms()
+        results["num_atoms_cond"] = mol_cond.GetNumHeavyAtoms()
         results["Reference molecule"] = name
     except Exception as e:
         results["Error"] = str(e)
