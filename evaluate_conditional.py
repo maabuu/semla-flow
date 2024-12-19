@@ -42,6 +42,8 @@ def evaluate_pair(mol_pred: Mol, mol_cond: Mol, name: str) -> dict[str, float]:
     try:
         results["tanimoto"] = compute_ecfp4_tanimoto(mol_pred, mol_cond)
         results["sucos"] = compute_sucos_score(mol_pred, mol_cond)
+        results["smiles_pred"] = MolToSmiles(mol_pred)
+        results["smiles_cond"] = MolToSmiles(mol_cond)
         results["Reference molecule"] = name
     except Exception as e:
         results["Error"] = str(e)
