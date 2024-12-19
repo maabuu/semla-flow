@@ -5,6 +5,7 @@ channels:
   - nvidia
 dependencies:
   - jupyterlab
+  - nbstripout
   - pandas
   - plotly
   - posebusters
