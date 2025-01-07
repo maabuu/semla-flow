@@ -6,6 +6,7 @@ channels:
 dependencies:
   - jupyterlab
   - nbstripout
+  - openbabel
   - pandas
   - plotly
   - posebusters
