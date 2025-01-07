@@ -46,7 +46,7 @@ fi
 # update env
 env=evaluation
 if [ ! -d "$prefix/envs/$env" ]; then
-    mamba create -n $env python=3.12 plotly rdkit pandas jupyterlab tqdm posebusters --yes
+    mamba create -n $env python=3.12 plotly rdkit pandas jupyterlab tqdm posebusters openbabel --yes
 else
     # do nothing
     echo "Environment exists"
