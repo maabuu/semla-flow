@@ -100,7 +100,7 @@ def evaluate_pair(mol_pred: Mol, mol_frag: Mol, mol_link: Mol,name: str) -> dict
         results["smiles_link"] = compute_smiles(mol_link)
         results["num_atoms_pred"] = mol_pred.GetNumHeavyAtoms()
         results["num_atoms_frag"] = mol_frag.GetNumHeavyAtoms()
-        results["num_atoms_link"] = mol_frag.GetNumHeavyAtoms()
+        results["num_atoms_link"] = mol_link.GetNumHeavyAtoms()
         results["Reference molecule"] = name
     except Exception as e:
         results["Error"] = str(e)
