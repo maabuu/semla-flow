@@ -13,10 +13,10 @@
 #SBATCH --cpus-per-task=34
 #SBATCH --mem=340GB
 
-#SBATCH --array=1-10%1
+#SBATCH --array=1-100%1
 
-#SBATCH --output=/vols/opig/users/buttensc/Storage/Projects/semla-flow/slurm/generate_10000_%A_%a.out
-#SBATCH --error=/vols/opig/users/buttensc/Storage/Projects/semla-flow/slurm/generate_10000_%A_%a.err
+#SBATCH --output=/vols/opig/users/buttensc/Storage/Projects/semla-flow/slurm/evaluation_individually_%A_%a.out
+#SBATCH --error=/vols/opig/users/buttensc/Storage/Projects/semla-flow/slurm/evaluation_individually_%A_%a.err
 
 # setup directories
 [ ! -d ~/Downloads ] && mkdir ~/Downloads
@@ -59,7 +59,7 @@ echo "Start task $SLURM_ARRAY_TASK_ID"
 cd /vols/opig/users/buttensc/Storage/Projects/semla-flow/predictions
 
 id=$SLURM_ARRAY_TASK_ID
-files=($(find . -maxdepth 1 -type f -name "*.sdf" | sort))
+files=($(find . -maxdepth 4 -type f -name "*.sdf" | sort))
 input_file=${files[$id]}
 
 # check if the file exists
@@ -68,6 +68,13 @@ if [ ! -f $input_file ]; then
     exit 1
 fi
 
-python ../evaluate_molecules.py $input_file
+# check if output file exists already
+output_file=${input_file%.*}.csv
+if [ -f $output_file ]; then
+    echo "Output file exists"
+    exit 1
+fi
+
+python ../evaluate_individually.py $input_file
 
 echo "Done task $SLURM_ARRAY_TASK_ID"

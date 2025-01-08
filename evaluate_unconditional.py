@@ -6,7 +6,6 @@ import os
 import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
-from typing import Generator
 
 import numpy as np
 import pandas as pd
@@ -14,8 +13,8 @@ from posebusters import PoseBusters
 from rdkit.Chem import QED, Crippen, Descriptors, Lipinski
 from rdkit.Chem.rdchem import Mol
 from rdkit.Chem.rdMolDescriptors import CalcNumRotatableBonds
-from rdkit.Chem.rdmolfiles import MolFromMolBlock, MolToSmiles
-from rdkit.Chem.rdmolops import AddHs, RemoveHs
+from rdkit.Chem.rdmolfiles import MolToSmiles, SDMolSupplier
+from rdkit.Chem.rdmolops import AddHs, RemoveHs, SanitizeMol
 from rdkit.Chem.SpacialScore import SPS
 from rdkit.rdBase import DisableLog
 from tqdm import tqdm
@@ -184,61 +183,29 @@ def parse_arguments() -> argparse.Namespace:
 
 def evaluate_one(mol: Mol) -> dict[str, float]:
     """Evaluate one molecule."""
-    metrics = compute_chemical_and_physical_validity(mol)
-    metrics["sa"] = compute_sa_score(mol)
-    metrics["sa_normalized"] = metrics["sa"] / mol.GetNumHeavyAtoms()
-    metrics["spacial"] = compute_spacial_score(mol)
-    metrics["qed"] = compute_qed_score(mol)
-    metrics["logp"] = compute_logp(mol)
-    metrics["lipinski"] = compute_lipinski_score(mol)
-    metrics["num_heavy"] = mol.GetNumHeavyAtoms()
-    metrics["weight"] = Descriptors.ExactMolWt(mol)
-    metrics["num_rings"] = mol.GetRingInfo().NumRings()
-    # metrics["num_stero_centers"] = mol.GetNumStereoCenters()
-    return metrics
 
-
-def evaluate_batch(mol_blocks: str) -> list[dict]:
-    """Evaluate a batch of molecules."""
-
-    DisableLog("rdApp.*")
-
-    results = []
-    # TODO: fix bug as this seems to add invalid molecule blocks
-    for mol_block in mol_blocks.split("$$$$\n"):
-        try:
-            mol = MolFromMolBlock(mol_block, sanitize=True)
-            mol = AddHs(mol, addCoords=True)
-        except Exception:
-            mol = None
-        if mol is None:
-            results.append({"fail": 1})
-            continue
-        results.append(evaluate_one(mol))
-        results[-1]["smiles"] = compute_smiles(mol)
-        results[-1]["name"] = get_name(mol)
-
+    try:
+        results = compute_chemical_and_physical_validity(mol)
+        SanitizeMol(mol)
+        mol = AddHs(mol, addCoords=True)
+        results["sa"] = compute_sa_score(mol)
+        results["sa_normalized"] = results["sa"] / mol.GetNumHeavyAtoms()
+        results["spacial"] = compute_spacial_score(mol)
+        results["qed"] = compute_qed_score(mol)
+        results["logp"] = compute_logp(mol)
+        results["lipinski"] = compute_lipinski_score(mol)
+        results["num_heavy"] = mol.GetNumHeavyAtoms()
+        results["weight"] = Descriptors.ExactMolWt(mol)
+        results["num_rings"] = mol.GetRingInfo().NumRings()
+        results["smiles"] = compute_smiles(mol)
+        results["name"] = get_name(mol)
+        # metrics["num_stero_centers"] = mol.GetNumStereoCenters()
+        results["fail"] = 0
+    except Exception as e:
+        results = {}
+        results["error"] = str(e).replace("\n", " ")
+        results["fail"] = 1
     return results
-
-
-def read_file_in_chunks(file_path, chunk_size=10000) -> Generator[str, None, None]:
-    """Read molecule file in chunks of molecules."""
-
-    chunk = ""
-    molecule_count = 0
-
-    with open(file_path, "r") as file:
-        for line in file:
-            chunk += line
-            if line.startswith("$$$$"):
-                molecule_count += 1
-                if molecule_count >= chunk_size:
-                    yield chunk
-                    chunk = ""
-                    molecule_count = 0
-        # last chunk if not empty
-        if chunk:
-            yield chunk
 
 
 def evaluate(
@@ -246,12 +213,15 @@ def evaluate(
 ):
     """Evaluate the molecules."""
 
-    results = []
-    with ProcessPoolExecutor() as pool:
-        futures = [
-            pool.submit(evaluate_batch, chunk)
-            for chunk in read_file_in_chunks(input_file, 100)
-        ]
+    DisableLog("rdApp.*")
+    total = sum(line.startswith("$$$$") for line in input_file.read_text().split("\n"))
+    supplier = SDMolSupplier(str(input_file), removeHs=False, sanitize=False)
+
+    with ProcessPoolExecutor(initializer=initializer) as executor:
+        futures = []
+        for mol in tqdm(supplier, total=total, desc="Submitting jobs"):
+            futures.append(executor.submit(evaluate_one, mol))
+        results = []
         for future in tqdm(as_completed(futures), total=len(futures)):
             results.extend(future.result())
 
@@ -261,7 +231,6 @@ def evaluate(
     results_df.to_csv(output_file, index=False)
 
     smiles = results_df.pop("smiles").tolist()
-    names = results_df.pop("name").tolist()
     training_smiles = set(training_smiles_file.read_text().split("\n"))
 
     metric_uniqueness = compute_uniquenss(smiles)
@@ -270,6 +239,10 @@ def evaluate(
     print(results_df.astype(float).describe())
     print(f"Uniqueness: {metric_uniqueness:.4f}")
     print(f"Novelty: {metric_novelty:.4f}")
+
+
+def initializer():
+    DisableLog("rdApp.*")
 
 
 if __name__ == "__main__":

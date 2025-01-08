@@ -98,9 +98,11 @@ def evaluate_pair(mol_pred: Mol, mol_cond: Mol, name: str) -> dict[str, float]:
         results["smiles_cond"] = compute_smiles(mol_cond)
         results["num_atoms_pred"] = mol_pred.GetNumHeavyAtoms()
         results["num_atoms_cond"] = mol_cond.GetNumHeavyAtoms()
-        results["Reference molecule"] = name
+        results["reference_molecule"] = name
+        results["fail"] = False
     except Exception as e:
         results["Error"] = str(e)
+        results["fail"] = True
     return results
 
 
@@ -122,17 +124,15 @@ def parse_arguments():
 def evaluate(predicted: Path, conditional: Path, output: Path | None = None):
     """Evaluate molecules."""
 
-    supplier = SDMolSupplier(str(conditional), removeHs=False)
-    mols_cond = [mol for mol in tqdm(supplier)]
+    supplier = SDMolSupplier(str(conditional), removeHs=False, sanitize=False)
+    mols_cond = [mol for mol in tqdm(supplier, desc="Loading conditionals")]
 
     results = []
-    supplier = SDMolSupplier(str(predicted), removeHs=False)
+    supplier = SDMolSupplier(str(predicted), removeHs=False, sanitize=False)
 
     futures = []
     with ProcessPoolExecutor() as executor:
-        i = 0
-        for mol_pred in tqdm(supplier, desc="Submitting jobs"):
-            i += 1
+        for i, mol_pred in enumerate(tqdm(supplier, desc="Submitting jobs")):
             name = get_name(mol_pred)
             if name == "":
                 logger.warning("No name found for molecule")
@@ -141,9 +141,6 @@ def evaluate(predicted: Path, conditional: Path, output: Path | None = None):
             mol_cond = mols_cond[id_cond]
             future = executor.submit(evaluate_pair, mol_pred, mol_cond, name)
             futures.append(future)
-
-            # if i % 100 == 0:
-            #     break
 
         desc = "Collecting jobs"
         for future in tqdm(as_completed(futures), total=len(futures), desc=desc):

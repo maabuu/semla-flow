@@ -102,8 +102,10 @@ def evaluate_pair(mol_pred: Mol, mol_frag: Mol, mol_link: Mol,name: str) -> dict
         results["num_atoms_frag"] = mol_frag.GetNumHeavyAtoms()
         results["num_atoms_link"] = mol_link.GetNumHeavyAtoms()
         results["Reference molecule"] = name
+        results["fail"] = 0
     except Exception as e:
-        results["Error"] = str(e)
+        results["fail"] = 1
+        results["Error"] = str(e).replace("\n", " ")
     return results
 
 
