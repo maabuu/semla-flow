@@ -11,7 +11,7 @@ from rdkit.Chem import AllChem, RemoveStereochemistry
 from rdkit.Chem.AllChem import GetMorganGenerator
 from rdkit.Chem.rdchem import Mol
 from rdkit.Chem.rdmolfiles import MolFromSmarts, MolToSmiles, SDMolSupplier
-from rdkit.Chem.rdmolops import RemoveHs
+from rdkit.Chem.rdmolops import RemoveHs, SanitizeMol
 from rdkit.Chem.Scaffolds import MurckoScaffold
 from rdkit.DataStructs import TanimotoSimilarity
 from rdkit.rdBase import DisableLog
@@ -64,25 +64,14 @@ def compute_ecfp4_tanimoto(mol_pred: Mol, mol_cond: Mol) -> float:
     return TanimotoSimilarity(fingerprint_pred, fingerprint_cond)
 
 
-def compute_sucos_score(mol_pred: Mol, mol_cond: Mol) -> float:
+def compute_sucos_score(mol_reference: Mol, mol_probe: Mol) -> float:
     """Compute the SuCOS score between two molecules."""
-    return get_sucos_score(mol_pred, mol_cond)
+    return get_sucos_score(mol_reference, mol_probe)
 
 
-def compare_rdkit_csk_scaffolds(mol_pred: Mol, mol_cond: Mol) -> bool:
-    """Check whether molecules share the same scaffold."""
-
-    scaffold_pred = MolToSmiles(get_scaffold(mol_pred, real_bm=False, use_csk=True))
-    scaffold_cond = MolToSmiles(get_scaffold(mol_cond, real_bm=False, use_csk=True))
-    return scaffold_pred == scaffold_cond
-
-
-def compare_true_csk_scaffolds(mol_pred: Mol, mol_cond: Mol) -> bool:
-    """Check whether molecules share the same scaffold."""
-
-    scaffold_pred = MolToSmiles(get_scaffold(mol_pred, real_bm=True, use_csk=True))
-    scaffold_cond = MolToSmiles(get_scaffold(mol_cond, real_bm=True, use_csk=True))
-    return scaffold_pred == scaffold_cond
+def get_true_csk_scaffold(mol: Mol) -> str:
+    """Get the true CSK scaffold of a molecule."""
+    return MolToSmiles(get_scaffold(mol, real_bm=True, use_csk=True))
 
 
 def evaluate_pair(mol_pred: Mol, mol_cond: Mol, name: str) -> dict[str, float]:
@@ -90,10 +79,17 @@ def evaluate_pair(mol_pred: Mol, mol_cond: Mol, name: str) -> dict[str, float]:
 
     results = {}
     try:
+        SanitizeMol(mol_pred)
+        SanitizeMol(mol_cond)
         results["tanimoto"] = compute_ecfp4_tanimoto(mol_pred, mol_cond)
-        results["sucos"] = compute_sucos_score(mol_pred, mol_cond)
-        results["scaffold_true_csk"] = compare_true_csk_scaffolds(mol_pred, mol_cond)
-        results["scaffold_rdkit_csk"] = compare_rdkit_csk_scaffolds(mol_pred, mol_cond)
+        results["sucos"] = compute_sucos_score(
+            mol_probe=mol_pred, mol_reference=mol_cond
+        )
+        results["scaffold_pred"] = get_true_csk_scaffold(mol_pred)
+        results["scaffold_cond"] = get_true_csk_scaffold(mol_cond)
+        results["scaffold_conserved"] = (
+            results["scaffold_pred"] == results["scaffold_cond"]
+        )
         results["smiles_pred"] = compute_smiles(mol_pred)
         results["smiles_cond"] = compute_smiles(mol_cond)
         results["num_atoms_pred"] = mol_pred.GetNumHeavyAtoms()
@@ -107,21 +103,23 @@ def evaluate_pair(mol_pred: Mol, mol_cond: Mol, name: str) -> dict[str, float]:
 
 
 def parse_arguments():
+    """Parse command line arguments."""
+
     parser = argparse.ArgumentParser(description="Evaluate molecules")
     help_line = "Path to SDF file containing predicted molecules."
     parser.add_argument("predicted", type=Path, help=help_line)
     help_line = "Path to SDF file containing conditional molecules."
     parser.add_argument("conditional", type=Path, help=help_line)
-    # default = Path(__file__).parent / "training_smiles.txt"
-    # parser.add_argument("--training", type=Path, help=help_line, default=default)
     help_line = "Output file."
     parser.add_argument("--output", "-o", type=Path, help=help_line)
-    # help_line = "Total number of molecules."
-    # parser.add_argument("--total", type=int, help=help_line, default=0)
+    help_line = "Enable debug mode."
+    parser.add_argument("--debug", action="store_true", help=help_line)
     return parser.parse_args()
 
 
-def evaluate(predicted: Path, conditional: Path, output: Path | None = None):
+def evaluate(
+    predicted: Path, conditional: Path, output: Path | None = None, debug=False
+):
     """Evaluate molecules."""
 
     supplier = SDMolSupplier(str(conditional), removeHs=False, sanitize=False)
@@ -129,16 +127,27 @@ def evaluate(predicted: Path, conditional: Path, output: Path | None = None):
 
     results = []
     supplier = SDMolSupplier(str(predicted), removeHs=False, sanitize=False)
+    total = len(supplier)
 
-    futures = []
+    if debug:
+        logger.warning("Debug mode enabled.")
+        total = 10
+
     with ProcessPoolExecutor() as executor:
+        futures = []
         for i, mol_pred in enumerate(tqdm(supplier, desc="Submitting jobs")):
-            name = get_name(mol_pred)
-            if name == "":
+            if debug and i == total:
+                break
+
+            try:
+                name = get_name(mol_pred)
+                reference_id = int(name.split("_")[-1])
+                mol_cond = mols_cond[reference_id]
+            except Exception:
                 logger.warning("No name found for molecule")
-                continue
-            id_cond = int(name.split("_")[-1])
-            mol_cond = mols_cond[id_cond]
+                name = None
+                mol_cond = None
+
             future = executor.submit(evaluate_pair, mol_pred, mol_cond, name)
             futures.append(future)
 
@@ -146,11 +155,17 @@ def evaluate(predicted: Path, conditional: Path, output: Path | None = None):
         for future in tqdm(as_completed(futures), total=len(futures), desc=desc):
             results.append(future.result())
 
+    results_df = pd.DataFrame(results)
+
+    if debug:
+        print(results_df)
+        return None
+
     if output is None:
         output = str(predicted).replace(".sdf", "_conditional.csv")
-    pd.DataFrame(results).to_csv(output, index=False)
+    results_df.to_csv(output, index=False)
 
 
 if __name__ == "__main__":
     args = parse_arguments()
-    evaluate(args.predicted, args.conditional, args.output)
+    evaluate(args.predicted, args.conditional, args.output, debug=args.debug)

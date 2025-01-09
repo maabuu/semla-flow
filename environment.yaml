@@ -16,3 +16,4 @@ dependencies:
   - rdkit
   - ruff
   - seaborn
+  - tqdm

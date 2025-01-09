@@ -68,13 +68,13 @@ if [ ! -f $input_file ]; then
     exit 1
 fi
 
-# check if output file exists already
-output_file=${input_file%.*}.csv
-if [ -f $output_file ]; then
-    echo "Output file exists"
-    exit 1
-fi
+# # check if output file exists already
+# output_file=${input_file%.*}.csv
+# if [ -f $output_file ]; then
+#     echo "Output file exists"
+#     exit 1
+# fi
 
-python ../evaluate_individually.py $input_file
+python ../evaluate_unconditional.py $input_file
 
 echo "Done task $SLURM_ARRAY_TASK_ID"

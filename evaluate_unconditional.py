@@ -171,21 +171,33 @@ def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate molecules")
     help_line = "Path to SDF file containing predicted molecules."
     parser.add_argument("predicted", type=Path, help=help_line)
-    help_line = "File containing SMILES strings for molecules in training set."
-    default = Path(__file__).parent / "data/unconditional/geom-drugs/train.smiles"
-    parser.add_argument("--training", type=Path, help=help_line, default=default)
     help_line = "Output file."
     parser.add_argument("--output", "-o", type=Path, help=help_line)
-    help_line = "Total number of molecules."
-    parser.add_argument("--total", type=int, help=help_line, default=0)
+    help_line = "Enable debug mode."
+    parser.add_argument("--debug", action="store_true", help=help_line)
     return parser.parse_args()
 
 
-def evaluate_one(mol: Mol) -> dict[str, float]:
+def evaluate_one(mol: Mol) -> dict[str, float | int | str]:
     """Evaluate one molecule."""
 
+    results = {}
+    results["fail"] = 1
     try:
         results = compute_chemical_and_physical_validity(mol)
+    except Exception as e:
+        results["error"] = str(e).replace("\n", " ")
+        return results
+
+    results["fail"] = 0
+
+    try:
+        results["name"] = get_name(mol)
+    except Exception as e:
+        results["error"] = str(e).replace("\n", " ")
+        return results
+
+    try:
         SanitizeMol(mol)
         mol = AddHs(mol, addCoords=True)
         results["sa"] = compute_sa_score(mol)
@@ -198,53 +210,52 @@ def evaluate_one(mol: Mol) -> dict[str, float]:
         results["weight"] = Descriptors.ExactMolWt(mol)
         results["num_rings"] = mol.GetRingInfo().NumRings()
         results["smiles"] = compute_smiles(mol)
-        results["name"] = get_name(mol)
         # metrics["num_stero_centers"] = mol.GetNumStereoCenters()
-        results["fail"] = 0
     except Exception as e:
-        results = {}
         results["error"] = str(e).replace("\n", " ")
-        results["fail"] = 1
+        return results
+
     return results
 
 
-def evaluate(
-    input_file: Path, training_smiles_file: Path, output_file: Path, total: int = 0
-):
+def initializer():
+    """Initialize the RDKit logger."""
+    DisableLog("rdApp.*")
+
+
+def evaluate(input_file: Path, output_file: Path, debug=False):
     """Evaluate the molecules."""
 
     DisableLog("rdApp.*")
-    total = sum(line.startswith("$$$$") for line in input_file.read_text().split("\n"))
     supplier = SDMolSupplier(str(input_file), removeHs=False, sanitize=False)
+    total = len(supplier)
+
+    if debug:
+        logger.warning("Debug mode enabled.")
+        total = 200
 
     with ProcessPoolExecutor(initializer=initializer) as executor:
         futures = []
-        for mol in tqdm(supplier, total=total, desc="Submitting jobs"):
+        for i, mol in enumerate(tqdm(supplier, total=total, desc="Submitting jobs")):
+            # if i < 200 or i > 220:
+            #     continue
+            if debug and i == total:
+                break
             futures.append(executor.submit(evaluate_one, mol))
         results = []
-        for future in tqdm(as_completed(futures), total=len(futures)):
-            results.extend(future.result())
+        for future in tqdm(
+            as_completed(futures), total=len(futures), desc="Collecting jobs"
+        ):
+            results.append(future.result())
 
-    results_df = pd.DataFrame.from_dict(results, orient="columns")
-
+    results_df = pd.DataFrame(results)
+    if debug:
+        print(results_df)
+        return None
     output_file = output_file or input_file.with_suffix(".csv")
     results_df.to_csv(output_file, index=False)
-
-    smiles = results_df.pop("smiles").tolist()
-    training_smiles = set(training_smiles_file.read_text().split("\n"))
-
-    metric_uniqueness = compute_uniquenss(smiles)
-    metric_novelty = compute_novelty(smiles, training_smiles)
-
-    print(results_df.astype(float).describe())
-    print(f"Uniqueness: {metric_uniqueness:.4f}")
-    print(f"Novelty: {metric_novelty:.4f}")
-
-
-def initializer():
-    DisableLog("rdApp.*")
 
 
 if __name__ == "__main__":
     args = parse_arguments()
-    evaluate(args.predicted, args.training, args.output, args.total)
+    evaluate(args.predicted, args.output, debug=args.debug)

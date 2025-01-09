@@ -1,7 +1,11 @@
-# individual assessment
 conda activate evaluation
 cd /homes/buttensc/Projects/semla-flow/
 
-nice -n 20 python evaluate_individually.py predictions/unconditional/eqgat/eqgat_100000_predictions.sdf
+files=$(ls predictions/unconditional/*/*.sdf)
+# files=$(ls data/*/*.sdf)
+# files=$(ls data/*/*/*.sdf)
+for file in $files; do
 
-nice -n 20 python evaluate_individually.py predictions/unconditional/geoldm/geoldm_100000_predictions.sdf
+    nice -n 3 python evaluate_unconditional.py $file
+
+done
