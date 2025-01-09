@@ -69,20 +69,9 @@ def compute_sucos_score(mol_reference: Mol, mol_probe: Mol) -> float:
     return get_sucos_score(mol_reference, mol_probe)
 
 
-def compare_rdkit_csk_scaffolds(mol_pred: Mol, mol_cond: Mol) -> bool:
-    """Check whether molecules share the same scaffold."""
-
-    scaffold_pred = MolToSmiles(get_scaffold(mol_pred, real_bm=False, use_csk=True))
-    scaffold_cond = MolToSmiles(get_scaffold(mol_cond, real_bm=False, use_csk=True))
-    return scaffold_pred == scaffold_cond
-
-
-def compare_true_csk_scaffolds(mol_pred: Mol, mol_cond: Mol) -> bool:
-    """Check whether molecules share the same scaffold."""
-
-    scaffold_pred = MolToSmiles(get_scaffold(mol_pred, real_bm=True, use_csk=True))
-    scaffold_cond = MolToSmiles(get_scaffold(mol_cond, real_bm=True, use_csk=True))
-    return scaffold_pred == scaffold_cond
+def get_true_csk_scaffold(mol: Mol) -> str:
+    """Get the true CSK scaffold of a molecule."""
+    return MolToSmiles(get_scaffold(mol, real_bm=True, use_csk=True))
 
 
 def evaluate_pair(
@@ -103,8 +92,11 @@ def evaluate_pair(
         results["sucos_link"] = compute_sucos_score(
             mol_reference=mol_link, mol_probe=mol_pred
         )
-        results["scaffold_true_csk"] = compare_true_csk_scaffolds(mol_pred, mol_link)
-        results["scaffold_rdkit_csk"] = compare_rdkit_csk_scaffolds(mol_pred, mol_link)
+        results["scaffold_pred"] = get_true_csk_scaffold(mol_pred)
+        results["scaffold_link"] = get_true_csk_scaffold(mol_link)
+        results["scaffold_conserved"] = (
+            results["scaffold_pred"] == results["scaffold_link"]
+        )
         results["smiles_pred"] = compute_smiles(mol_pred)
         results["smiles_link"] = compute_smiles(mol_link)
         results["num_atoms_pred"] = mol_pred.GetNumHeavyAtoms()
