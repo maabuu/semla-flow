@@ -50,18 +50,6 @@ def get_name(mol: Mol) -> str:
     return ""
 
 
-def compute_uniquenss(smiles: list[str]) -> float:
-    """Compute the uniqueness of a list of SMILES strings."""
-    valid_smiles = [s for s in smiles if s not in {None, "", pd.NA, np.nan}]  # list
-    return len(set(valid_smiles)) / len(valid_smiles)
-
-
-def compute_novelty(smiles: list[str], training_smiles: set[str]) -> float:
-    """Compute the novelty of a list of SMILES strings."""
-    valid_smiles = set(s for s in smiles if s not in {None, "", pd.NA, np.nan})  # set
-    return len(valid_smiles - training_smiles) / len(valid_smiles)
-
-
 def compute_chemical_and_physical_validity(mol: Mol) -> dict[str, bool]:
     """Compute the chemical and physical validity of a molecule."""
 
