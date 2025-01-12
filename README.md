@@ -3,6 +3,62 @@
 This project creates a novel equivariant attention-based message passing architecture, Semla, for molecular design and dynamics tasks. We train a molecular generation model, SemlaFlow, using flow matching with optimal transport to generate realistic 3D molecular structures.
 
 
+## New Features
+### Generate Shape Conditioned Molecules
+This feature generates 3D molecular structures that are similar to a seed molecule, based on a pre-trained model.
+
+Parameters:
+- data_path: Path to the dataset folder containing .smol files (e.g., ./geom_data/smol/).
+- ckpt_path: Path to the pre-trained model checkpoint (e.g., ./trained_models/geom-drugs/200epochs.ckpt).
+- dataset: Name of the dataset (e.g., geom-drugs).
+- n_molecules: Number of reference molecules to generate similar molecules for.
+- batch_cost: Number of similar molecules to generate for each reference molecule.
+- sigma: Standard deviation of random noise added to coordinates during sampling.
+- denoise_steps: Number of integration steps used by the ODE during sampling.
+- save_dir: Directory where the output will be saved.
+- save_file: File name for the saved results.
+- 
+Example:
+To generate 100 molecules similar to 1000 seed molecules using the test_first_1000.smol dataset:
+
+```python
+python semlaflow/generate_similar.py \
+  --data_path ./geom_data/smol/ \
+  --ckpt_path ./trained_models/geom-drugs/200epochs.ckpt \
+  --dataset geom-drugs \
+  --n_molecules 1000 \
+  --batch_cost 100 \
+  --sigma 0.25 \
+  --denoise_steps 72 \
+  --save_dir ./predictions/ \
+  --save_file auto
+```
+
+### Bioisosteric Merges
+This feature merges molecular fragments from a dataset to produce new molecules while preserving structural and geometric properties.
+
+Parameters:
+- data_path: Path to the dataset folder containing .smol files (e.g., ./geom_data/difflinker_data/).
+- ckpt_path: Path to the pre-trained model checkpoint (e.g., ./trained_models/geom-drugs/200epochs.ckpt).
+- dataset: Name of the dataset (e.g., geom-drugs).
+- n_molecules: Number of molecules to process.
+- batch_cost: Number of fragments merged for each molecule.
+- save_dir: Directory where the output will be saved.
+- save_file: File name for the merged results (e.g., link_replacement_no_h.sdf).
+
+Example:
+To merge fragments from the fragments_no_h.smol dataset and save the result as merged_molecules.sdf:
+
+```python
+python semlaflow/merge.py \
+  --data_path ./geom_data/difflinker_data \
+  --ckpt_path ./trained_models/geom-drugs/200epochs.ckpt \
+  --dataset geom-drugs \
+  --n_molecules 1000 \
+  --batch_cost 100 \
+  --save_dir ./predictions/ \
+  --save_file merged_molecules.sdf
+```
 ## Installation
 
 All of the code was run using a mamba/conda environment. You can of course use a different environment manager; all core requirements (other than cxx-compiler) are contained in the `requirements.txt` file. Using mamba/conda you can recreate the environment as follows:

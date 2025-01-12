@@ -609,15 +609,15 @@ def create_templates_for_linker_generation(data, linker_sizes):
 
 if __name__ == "__main__":
     # val_data_prefix =  'geom_multifrag_test'
-    # data_path = r'C:\Users\ziv-admin\PycharmProjects\semla-flow\geom_data'
+    # data_path = r'C:\Users\ziv-admin\PycharmProjects\semla-flow\geom_data\difflinker_data'
     # device = 'cpu'
     # test_dataset = ZincDataset(data_path, val_data_prefix,device)
     # batch_size = 1
     # test_dataloader = get_dataloader(test_dataset, batch_size, collate_fn=collate)
     #
-    # true_molecules_sdf_path = "./../../geom_data/true_molecules.sdf"
-    # true_fragments_sdf_path = "./../../geom_data/true_fragments.sdf"
-    #
+    # true_molecules_sdf_path = "./../../geom_data/true_molecules_1.sdf"
+    # true_fragments_sdf_path = "./../../geom_data/true_fragments_1.sdf"
+    # #
     # # Initialize SD writers
     # true_molecules_writer = Chem.SDWriter(true_molecules_sdf_path)
     # true_fragments_writer = Chem.SDWriter(true_fragments_sdf_path)
@@ -654,24 +654,62 @@ if __name__ == "__main__":
     #
     # print(f"Saved true molecules to {true_molecules_sdf_path}")
     # print(f"Saved true fragments to {true_fragments_sdf_path}")
+    # from semlaflow.preprocess import *
+    #
+    # supplier = Chem.SDMolSupplier(r'C:\Users\ziv-admin\PycharmProjects\semla-flow\geom_data\difflinker_data\geom_multifrag_test_molecules_h.sdf'
+    #                               ,sanitize=False)
+    # true_molecules_batch = [mol for mol in supplier if mol is not None]
+    #
+    # supplier = Chem.SDMolSupplier(r'C:\Users\ziv-admin\PycharmProjects\semla-flow\geom_data\difflinker_data\true_fragments_openbabel_h.sdf',
+    #                               sanitize=False)
+    # true_fragments_batch = [mol for mol in supplier if mol is not None]
+    # fragments = []
+    # sanitized_fragments_sdf_path = r'C:\Users\ziv-admin\PycharmProjects\semla-flow\geom_data\reference_mols.sdf'
+    #
+    # # Initialize SDWriter
+    # sanitized_fragments_writer = Chem.SDWriter(sanitized_fragments_sdf_path)
+    #
+    # for real_mol, frag_mol in zip(true_molecules_batch, true_fragments_batch):
+    #     try:
+    #         # Attempt sanitization of the fragment molecule
+    #         Chem.SanitizeMol(frag_mol)
+    #         is_sanitized = True
+    #     except Exception as e:
+    #         is_sanitized = False
+    #         print(f"Fragment molecule failed sanitization: {e}")
+    #
+    #     if is_sanitized:
+    #         sanitized_fragments_writer.write(real_mol)
+    #         real_size = real_mol.GetNumAtoms()
+    #         frag_geom = GeometricMol.from_rdkit(frag_mol)
+    #         max_atoms = max(real_size, frag_geom.coords.shape[0])
+    #         frag_geom = GeometricMol.pad_molecule(frag_geom, max_atoms)
+    #         fragments.append(frag_geom)
+    #
+    # sanitized_fragments_writer.close()
+    # # smol_mols = [GeometricMol.from_rdkit(raw_mol) for raw_mol in molecules]
+    # batch = GeometricMolBatch.from_list(fragments)
+    # dataset_bytes = batch.to_bytes()
+    # Path(r'C:\Users\ziv-admin\PycharmProjects\semla-flow\geom_data\fragmentsbla.smol').write_bytes(dataset_bytes)
+
+
     from semlaflow.preprocess import *
 
-    supplier = Chem.SDMolSupplier(r'C:\Users\ziv-admin\PycharmProjects\semla-flow\geom_data\difflinker_data\true_molecules_with_h.sdf',
-                                  sanitize=False)
-    true_molecules_batch = [mol for mol in supplier if mol is not None]
-
-    supplier = Chem.SDMolSupplier(r'C:\Users\ziv-admin\PycharmProjects\semla-flow\geom_data\difflinker_data\true_fragments_with_h.sdf',
-                                  sanitize=False)
-    true_fragments_batch = [mol for mol in supplier if mol is not None]
+    supplier = Chem.SDMolSupplier(r'C:\Users\ziv-admin\PycharmProjects\semla-flow\geom_data\active_site\mpro_active_site_fragments_combined 2.sdf'
+                                  ,sanitize=False)
+    supplier = supplier[0]
+    num_mols = 1000
+    mu = 45
+    sigma = 3
+    sizes = np.random.normal(mu, sigma, num_mols)
+    sizes = np.round(sizes).astype(int)
     fragments = []
-    for real_mol, frag_mol in zip(true_molecules_batch, true_fragments_batch):
-        real_size = real_mol.GetNumAtoms()
-        frag_geom = GeometricMol.from_rdkit(frag_mol)
-        max_atoms = max(real_size, frag_geom.coords.shape[0])
-        frag_geom = GeometricMol.pad_molecule(frag_geom, max_atoms)
-        fragments.append(frag_geom)
+    for num_atoms in sizes:
+            frag_geom = GeometricMol.sampled_from_rdkit(supplier, int(num_atoms/2))
+            frag_geom = GeometricMol.pad_molecule(frag_geom, num_atoms)
+            fragments.append(frag_geom)
 
     # smol_mols = [GeometricMol.from_rdkit(raw_mol) for raw_mol in molecules]
     batch = GeometricMolBatch.from_list(fragments)
     dataset_bytes = batch.to_bytes()
-    Path(r'C:\Users\ziv-admin\PycharmProjects\semla-flow\geom_data\fragments.smol').write_bytes(dataset_bytes)
+    Path(r'C:\Users\ziv-admin\PycharmProjects\semla-flow\geom_data\active_site\sampled_heavy_atoms.smol').write_bytes(dataset_bytes)

@@ -338,10 +338,11 @@ class GeometricInterpolantDM(GeometricDM):
         elif dataset == "test" and self.test_interpolant is not None:
             objs = self.test_interpolant.interpolate(batch)
             batch = list(zip(*objs))
-
+        # "TODO: change oit for merge"
         elif dataset == "edit" and self.edit_interpolant is not None:
             batch = [batch[0] for _ in range(self.batch_cost)]
-            # objs = self.edit_interpolant.interpolate(batch)
-            # batch = list(zip(*objs))
+            if not self.merge:
+                objs = self.edit_interpolant.interpolate(batch)
+                batch = list(zip(*objs))
 
         return super()._collate(batch, dataset)

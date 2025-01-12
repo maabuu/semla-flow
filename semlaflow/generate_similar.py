@@ -3,7 +3,13 @@ Script for generating molecules using a trained model and saving them.
 
 Note that the script currently does not save the molecules in batches - all of the molecules are generated and then
 all saved together in one Smol batch. If generating many molecules ensure you have enough memory to store them.
+
 """
+import sys
+print(sys.path)
+sys.path.append('.')
+import os
+#os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import argparse
 from pathlib import Path
@@ -25,7 +31,7 @@ import numpy as np
 
 # Default script arguments
 DEFAULT_SAVE_FILE = "predictions.smol"
-DEFAULT_DATASET_SPLIT = "train"
+DEFAULT_DATASET_SPLIT = "test"
 DEFAULT_N_MOLECULES = 5000
 DEFAULT_BATCH_COST = 8192
 DEFAULT_BUCKET_COST_SCALE = "linear"
@@ -34,8 +40,8 @@ DEFAULT_DENOISE_STEPS = 50
 DEFAULT_CAT_SAMPLING_NOISE_LEVEL = 1
 DEFAULT_ODE_SAMPLING_STRATEGY = "log"
 
-def load_model(args, vocab):
-    checkpoint = torch.load(args.ckpt_path, map_location=torch.device('cpu'))
+def load_model(args, vocab, device):
+    checkpoint = torch.load(args.ckpt_path, map_location= device)
     hparams = checkpoint["hyper_parameters"]
 
     hparams["compile_model"] = False
@@ -148,21 +154,19 @@ def build_dm(args, hparams, vocab):
     elif args.dataset_split == "val":
         dataset_path = Path(args.data_path) / "val.smol"
     elif args.dataset_split == "test":
-        dataset_path = Path(args.data_path) / "test.smol"
+        dataset_path = Path(args.data_path) / "test_first_1000.smol"
 
     dataset = GeometricDataset.load(dataset_path, transform=transform)
-    dataset = dataset.sample(args.n_molecules, replacement=True)
+    dataset = dataset.sample(args.n_molecules, replacement=False, fixed_indices = True)
 
     type_mask_index = vocab.indices_from_tokens(["<MASK>"])[0] if hparams["val-type-interpolation"] == "mask" else None
     bond_mask_index = None
 
     if args.ode_sampling_strategy == "linear":
-        time_points = np.linspace(0, 1, args.integration_steps + 1).tolist()
-        time_points.reverse()
-
+         time_points = np.linspace(0, 1, args.integration_steps + 1).tolist()
+         time_points.reverse()
     elif args.ode_sampling_strategy == "log":
         time_points = (1 - np.geomspace(0.01, 1.0, args.integration_steps + 1)).tolist()
-
 
     fixed_time = time_points[args.denoise_steps]
 
@@ -200,8 +204,8 @@ def build_dm(args, hparams, vocab):
     return dm
 
 
-def dm_from_ckpt(args, vocab):
-    checkpoint = torch.load(args.ckpt_path,map_location=torch.device('cpu'))
+def dm_from_ckpt(args, vocab, device):
+    checkpoint = torch.load(args.ckpt_path, map_location= device)
     hparams = checkpoint["hyper_parameters"]
     dm = build_dm(args, hparams, vocab)
     return dm
@@ -244,6 +248,8 @@ def main(args):
     print(f"Running prediction script for {args.n_molecules} molecules...")
     print(f"Using model stored at {args.ckpt_path}")
 
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
     L.seed_everything(12345)
     util.disable_lib_stdout()
     # util.configure_fs()
@@ -253,11 +259,11 @@ def main(args):
     print("Vocab complete.")
 
     print("Loading datamodule...")
-    dm = dm_from_ckpt(args, vocab)
+    dm = dm_from_ckpt(args, vocab, device)
     print("Datamodule complete.")
 
     print(f"Loading model...")
-    model = load_model(args, vocab)
+    model = load_model(args, vocab, device)
     print("Model complete.")
 
 
@@ -266,7 +272,8 @@ def main(args):
     # print("Metrics complete.")
 
     print("Running generation...")
-    molecules, raw_outputs = util.generate_similar_molecules( model, dm, steps= args.integration_steps, denoise_steps=args.denoise_steps, sigma=args.sigma, strategy=args.ode_sampling_strategy)
+    molecules, raw_outputs = util.generate_similar_molecules( model, dm, steps= args.integration_steps,
+                                                              denoise_steps=args.denoise_steps, sigma=args.sigma, strategy=args.ode_sampling_strategy, device= device)
     print("Generation complete.")
 
     print(f"Saving predictions to {args.save_dir}/{args.save_file}")
@@ -299,8 +306,13 @@ if __name__ == "__main__":
     parser.add_argument("--ode_sampling_strategy", type=str, default=DEFAULT_ODE_SAMPLING_STRATEGY)
 
     parser.add_argument("--bucket_cost_scale", type=str, default=DEFAULT_BUCKET_COST_SCALE)
+
     import torch.multiprocessing as mp
 
     mp.set_start_method("spawn", force=True)
     args = parser.parse_args()
+    if args.save_file == "auto":
+        args.save_file = f"predictions_d{args.denoise_steps}_s{args.sigma:.2f}.sdf"
+
+    os.makedirs(args.save_dir, exist_ok=True)
     main(args)

@@ -207,10 +207,10 @@ def generate_molecules(model, dm, steps, strategy, stabilities=False):
     stabilities = [mol_stab for mol_stabs in stabilities for mol_stab in mol_stabs]
     return molecules, outputs, stabilities
 
-def generate_similar_molecules(model, dm, steps, denoise_steps,sigma, strategy, stabilities=False):
+def generate_similar_molecules(model, dm, steps, denoise_steps,sigma, strategy, stabilities=False, device = 'cpu'):
     edit_dl = dm.edit_dataloader()
     model.eval()
-    cuda_model = model.to("cpu")
+    cuda_model = model.to(device)
 
     outputs = []
     molecules = []
@@ -232,10 +232,10 @@ def generate_similar_molecules(model, dm, steps, denoise_steps,sigma, strategy, 
     stabilities = [mol_stab for mol_stabs in stabilities for mol_stab in mol_stabs]
     return molecules, outputs, stabilities
 
-def merge_fragments(model, dm, steps, merge_interpolant, strategy, stabilities=False):
+def merge_fragments(model, dm, steps, merge_interpolant, strategy, stabilities=False, device = 'cpu'):
     edit_dl = dm.edit_dataloader()
     model.eval()
-    cuda_model = model.to("cpu")
+    cuda_model = model.to(device)
 
     molecules = []
     outputs = []

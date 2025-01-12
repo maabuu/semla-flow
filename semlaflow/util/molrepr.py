@@ -13,6 +13,7 @@ import torch
 import numpy as np
 from rdkit import Chem
 from scipy.spatial.transform import Rotation
+import random
 
 import semlaflow.util.rdkit as smolRD
 import semlaflow.util.functional as smolF
@@ -477,6 +478,51 @@ class GeometricMol(SmolMol):
         mol = GeometricMol(coords, atomics, bond_indices, bond_types, charges=charges, str_id=smiles)
         return mol
 
+    @staticmethod
+    def sampled_from_rdkit(mol: Chem.rdchem.Mol, size: Optional[int]) -> GeometricMol:
+        # TODO handle this better - maybe create 3D info if not provided, with a warning
+        if mol.GetNumConformers() == 0 or not mol.GetConformer().Is3D():
+            raise RuntimeError(f"The default conformer must have 3D coordinates")
+
+        conf = mol.GetConformer()
+        smiles = smolRD.smiles_from_mol(mol)
+
+        coords = np.array(conf.GetPositions())
+        atomics = [atom.GetAtomicNum() for atom in mol.GetAtoms()]
+        charges = [atom.GetFormalCharge() for atom in mol.GetAtoms()]
+
+        bonds = []
+
+        # Identify non-hydrogen atom indices
+        non_h_indices = [i for i, atomic_num in enumerate(atomics) if atomic_num != 1]
+
+        # Check if there are enough non-hydrogen atoms
+        num_non_h_atoms = len(non_h_indices)
+        if num_non_h_atoms == 0:
+            raise ValueError("Molecule contains no non-hydrogen atoms for sampling.")
+
+        # Determine sampled indices
+        if size is None or size >= num_non_h_atoms:
+            sampled_indices = non_h_indices  # Use all non-hydrogen atoms
+        else:
+            sampled_indices = sorted(random.sample(non_h_indices, size))
+
+        # Sort indices to preserve relative order
+        sampled_indices = sorted(sampled_indices)
+
+        # Subset the arrays based on the sampled indices
+        coords = coords[sampled_indices]
+        atomics = [atomics[i] for i in sampled_indices]
+        charges = [charges[i] for i in sampled_indices]
+
+
+        coords = torch.tensor(coords)
+        atomics = torch.tensor(atomics)
+        bonds = torch.tensor(bonds)
+        charges = torch.tensor(charges)
+
+        mol = GeometricMol(coords, atomics, charges=charges, str_id=smiles)
+        return mol
     @staticmethod
     def pad_molecule(molecule: GeometricMol, target_size: int) -> GeometricMol:
         """

@@ -936,18 +936,19 @@ class MolecularCFM(L.LightningModule):
             raise ValueError(f"Unknown ODE integration strategy '{strategy}'")
 
         times = torch.zeros(batch_size, device=self.device)
+        print(times.device)
         step_sizes = [t1 - t0 for t0, t1 in zip(time_points[:-1], time_points[1:])]
         # Start the loop from denoise_steps
 
-        curr = {k: v.clone() for k, v in prior.items()}
+        curr = {k: v.to(self.device).clone() for k, v in prior.items()}
 
         cond_batch = {
-            "coords": torch.zeros_like(prior["coords"]),
-            "atomics": torch.zeros_like(prior["atomics"]),
-            "bonds": torch.zeros_like(prior["bonds"])
+            "coords": torch.zeros_like(prior["coords"]).to(self.device),
+            "atomics": torch.zeros_like(prior["atomics"]).to(self.device),
+            "bonds": torch.zeros_like(prior["bonds"]).to(self.device)
         }
 
-        frag_mask = torch.stack([mol.frag_mask for mol in batch])
+        frag_mask = torch.stack([mol.frag_mask for mol in batch]).to(self.device)
         pairwise_mask = frag_mask.unsqueeze(1) & frag_mask.unsqueeze(2)  # Shape: (10, 29, 29)
         # pairwise_mask = pairwise_mask.view(frag_mask.size(0), -1)
 
@@ -978,19 +979,10 @@ class MolecularCFM(L.LightningModule):
 
                 curr = self.integrator.step(curr, predicted, prior, times, step_size)
 
-                if times[0]<0.95:
-                # tuples = zip(from_mols, batch, times.tolist())
-                # interp_mols = [merge_interpolant._interpolate_mol(from_mol, to_mol, t) for from_mol, to_mol, t in tuples]
-                # interp_smol_batch = GeometricMolBatch.from_list(interp_mols)
-                # interpolated = geom._batch_to_dict(interp_smol_batch)
-                #
-                # curr["coords"] = torch.where(frag_mask.unsqueeze(-1), interpolated["coords"], curr["coords"])
-                # curr["atomics"] = torch.where(frag_mask.unsqueeze(-1), interpolated["atomics"], curr["atomics"])
-                # curr["bonds"] = torch.where(pairwise_mask.unsqueeze(-1), interpolated["bonds"], curr["bonds"])
-                # else:
-                    curr["coords"] = torch.where(frag_mask.unsqueeze(-1), data["coords"], curr["coords"])
-                    curr["atomics"] = torch.where(frag_mask.unsqueeze(-1), data["atomics"], curr["atomics"])
-                    curr["bonds"] = torch.where(pairwise_mask.unsqueeze(-1), data["bonds"], curr["bonds"])
+
+                curr["coords"] = torch.where(frag_mask.unsqueeze(-1), data["coords"].to(self.device), curr["coords"])
+                curr["atomics"] = torch.where(frag_mask.unsqueeze(-1), data["atomics"].to(self.device), curr["atomics"])
+                # curr["bonds"] = torch.where(pairwise_mask.unsqueeze(-1), data["bonds"].to(self.device), curr["bonds"])
 
 
                 times = times + step_size
@@ -1004,6 +996,10 @@ class MolecularCFM(L.LightningModule):
 
     def _interpolate_predict(self, batch, steps, denoise_steps= 50, sigma = 0.1, strategy="linear"):
         prior, data, interpolated, times = batch
+        prior = {k: v.to(self.device) for k, v in prior.items()} if isinstance(prior, dict) else prior.to(self.device)
+        data = {k: v.to(self.device) for k, v in data.items()} if isinstance(data, dict) else data.to(self.device)
+        interpolated = {k: v.to(self.device) for k, v in interpolated.items()} if isinstance(interpolated, dict) else interpolated.to(self.device)
+        times = times.to(self.device) if hasattr(times, 'cuda') else times
 
         if self.distill:
             return self._distill_generate(prior)
