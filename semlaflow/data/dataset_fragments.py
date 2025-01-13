@@ -698,18 +698,18 @@ if __name__ == "__main__":
     supplier = Chem.SDMolSupplier(r'C:\Users\ziv-admin\PycharmProjects\semla-flow\geom_data\active_site\mpro_active_site_fragments_combined 2.sdf'
                                   ,sanitize=False)
     supplier = supplier[0]
-    num_mols = 1000
+    num_mols = 5000
     mu = 45
     sigma = 3
     sizes = np.random.normal(mu, sigma, num_mols)
     sizes = np.round(sizes).astype(int)
     fragments = []
     for num_atoms in sizes:
-            frag_geom = GeometricMol.sampled_from_rdkit(supplier, int(num_atoms/2))
+            frag_geom = GeometricMol.sampled_from_rdkit(supplier, num_atoms)
             frag_geom = GeometricMol.pad_molecule(frag_geom, num_atoms)
             fragments.append(frag_geom)
 
     # smol_mols = [GeometricMol.from_rdkit(raw_mol) for raw_mol in molecules]
     batch = GeometricMolBatch.from_list(fragments)
     dataset_bytes = batch.to_bytes()
-    Path(r'C:\Users\ziv-admin\PycharmProjects\semla-flow\geom_data\active_site\sampled_heavy_atoms.smol').write_bytes(dataset_bytes)
+    Path(r'C:\Users\ziv-admin\PycharmProjects\semla-flow\geom_data\active_site\sampled_atoms.smol').write_bytes(dataset_bytes)

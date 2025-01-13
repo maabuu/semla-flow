@@ -493,19 +493,12 @@ class GeometricMol(SmolMol):
 
         bonds = []
 
-        # Identify non-hydrogen atom indices
-        non_h_indices = [i for i, atomic_num in enumerate(atomics) if atomic_num != 1]
-
-        # Check if there are enough non-hydrogen atoms
-        num_non_h_atoms = len(non_h_indices)
-        if num_non_h_atoms == 0:
-            raise ValueError("Molecule contains no non-hydrogen atoms for sampling.")
-
-        # Determine sampled indices
-        if size is None or size >= num_non_h_atoms:
-            sampled_indices = non_h_indices  # Use all non-hydrogen atoms
+        # If size is None or exceeds the number of atoms, use all atoms
+        num_atoms = len(atomics)
+        if size is None or size >= num_atoms:
+            sampled_indices = list(range(num_atoms))
         else:
-            sampled_indices = sorted(random.sample(non_h_indices, size))
+            sampled_indices = random.sample(range(num_atoms), size)
 
         # Sort indices to preserve relative order
         sampled_indices = sorted(sampled_indices)

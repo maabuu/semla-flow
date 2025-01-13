@@ -232,7 +232,7 @@ def generate_similar_molecules(model, dm, steps, denoise_steps,sigma, strategy, 
     stabilities = [mol_stab for mol_stabs in stabilities for mol_stab in mol_stabs]
     return molecules, outputs, stabilities
 
-def merge_fragments(model, dm, steps, merge_interpolant, strategy, stabilities=False, device = 'cpu'):
+def merge_fragments(model, dm, steps, merge_interpolant, strategy, stabilities=False, cond_bonds = True, device = 'cpu'):
     edit_dl = dm.edit_dataloader()
     model.eval()
     cuda_model = model.to(device)
@@ -242,7 +242,7 @@ def merge_fragments(model, dm, steps, merge_interpolant, strategy, stabilities=F
     for batch_idx, batch in enumerate(tqdm(edit_dl)):
         name = f"reference_{batch_idx}"
 
-        output = cuda_model._replacment_guidance(batch, steps, merge_interpolant = merge_interpolant, strategy = strategy)
+        output = cuda_model._replacment_guidance(batch, steps, merge_interpolant = merge_interpolant, strategy = strategy, cond_bonds = cond_bonds)
         outputs.append(output)
         molecules.append(cuda_model._generate_mols(output, name = name))
 

@@ -56,9 +56,19 @@ python semlaflow/merge.py \
   --dataset geom-drugs \
   --n_molecules 1000 \
   --batch_cost 100 \
+  --cond_bonds
   --save_dir ./predictions/ \
   --save_file merged_molecules.sdf
 ```
+
+### Lead Generation from Fragment Screening
+This feature facilitates lead molecule generation from fragment datasets.
+
+Prepare the data: Use semlaflow/data/dataset_fragments.py to preprocess the fragments dataset. You can define the number of different samples you want to generate from all the fragment atoms.
+
+
+Run merging: Execute semlaflow/merge.py to merge the fragments into lead molecules. Use the --no_cond_bonds flag to skip conditional bonds during the process.
+
 ## Installation
 
 All of the code was run using a mamba/conda environment. You can of course use a different environment manager; all core requirements (other than cxx-compiler) are contained in the `requirements.txt` file. Using mamba/conda you can recreate the environment as follows:

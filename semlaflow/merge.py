@@ -4,6 +4,9 @@ Script for generating molecules using a trained model and saving them.
 Note that the script currently does not save the molecules in batches - all of the molecules are generated and then
 all saved together in one Smol batch. If generating many molecules ensure you have enough memory to store them.
 """
+import sys
+print(sys.path)
+sys.path.append('.')
 
 import argparse
 from pathlib import Path
@@ -148,7 +151,7 @@ def build_dm(args, hparams, vocab):
     elif args.dataset_split == "val":
         dataset_path = Path(args.data_path) / "val.smol"
     elif args.dataset_split == "test":
-        dataset_path = Path(args.data_path) / "sampled_heavy_atoms.smol"
+        dataset_path = Path(args.data_path) / "sampled_atoms.smol"
 
     dataset = GeometricDataset.load(dataset_path, transform=transform)
     dataset = dataset.sample(args.n_molecules, replacement=False, fixed_indices = True)
@@ -269,7 +272,7 @@ def main(args):
     # print("Metrics complete.")
 
     print("Running generation...")
-    molecules, raw_outputs = util.merge_fragments( model, dm, steps= args.integration_steps,  merge_interpolant = merge_interpolant, strategy=args.ode_sampling_strategy, device = device)
+    molecules, raw_outputs = util.merge_fragments( model, dm, steps= args.integration_steps,  merge_interpolant = merge_interpolant, strategy=args.ode_sampling_strategy, cond_bonds = args.cond_bonds, device = device)
     print("Generation complete.")
 
     print(f"Saving predictions to {args.save_dir}/{args.save_file}")
@@ -296,7 +299,8 @@ if __name__ == "__main__":
     parser.add_argument("--n_molecules", type=int, default=DEFAULT_N_MOLECULES)
     parser.add_argument("--integration_steps", type=int, default=DEFAULT_INTEGRATION_STEPS)
     parser.add_argument("--denoise_steps", type=int, default=DEFAULT_DENOISE_STEPS)
-    parser.add_argument("--sigma", type=float, default=0.1)
+    parser.add_argument("--cond_bonds", action="store_true", help="Enable conditional bonds (default: True)")
+    parser.add_argument("--no_cond_bonds", dest="cond_bonds", action="store_false", help="Disable conditional bonds")
 
     parser.add_argument("--cat_sampling_noise_level", type=int, default=DEFAULT_CAT_SAMPLING_NOISE_LEVEL)
     parser.add_argument("--ode_sampling_strategy", type=str, default=DEFAULT_ODE_SAMPLING_STRATEGY)

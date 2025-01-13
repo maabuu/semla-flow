@@ -909,7 +909,7 @@ class MolecularCFM(L.LightningModule):
         predicted["coords"] = predicted["coords"] * self.coord_scale
         return predicted
 
-    def _replacment_guidance(self, batch, steps, merge_interpolant, strategy="linear"):
+    def _replacment_guidance(self, batch, steps, merge_interpolant, strategy="linear", cond_bonds = True):
 
 
         batch_size = len(batch)
@@ -982,7 +982,8 @@ class MolecularCFM(L.LightningModule):
 
                 curr["coords"] = torch.where(frag_mask.unsqueeze(-1), data["coords"].to(self.device), curr["coords"])
                 curr["atomics"] = torch.where(frag_mask.unsqueeze(-1), data["atomics"].to(self.device), curr["atomics"])
-                # curr["bonds"] = torch.where(pairwise_mask.unsqueeze(-1), data["bonds"].to(self.device), curr["bonds"])
+                if cond_bonds:
+                    curr["bonds"] = torch.where(pairwise_mask.unsqueeze(-1), data["bonds"].to(self.device), curr["bonds"])
 
 
                 times = times + step_size
