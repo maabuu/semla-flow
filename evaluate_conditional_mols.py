@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 from rdkit.Chem.rdchem import Mol
 from rdkit.Chem.rdmolfiles import MolFromSmarts, MolToSmiles, SDMolSupplier
-from rdkit.Chem.rdmolops import RemoveAllHs, RemoveHs, SanitizeMol
+from rdkit.Chem.rdmolops import AddHs, RemoveAllHs, RemoveHs, SanitizeMol
 from tqdm import tqdm
 
 from tools import (
@@ -34,12 +34,15 @@ def evaluate_pair(mol_pred: Mol, mol_cond: Mol, name: str) -> dict[str, float]:
 
         # needs Hydrogens
 
+        AddHs(mol_pred, addCoords=True)
+        AddHs(mol_cond, addCoords=True)
+
         results["esp_sim"] = compute_esp_sim(mol_probe=mol_pred, mol_ref=mol_cond)
+
+        # does not need Hydrogens
 
         RemoveAllHs(mol_pred)
         RemoveAllHs(mol_cond)
-
-        # does not need Hydrogens
 
         results["tanimoto"] = compute_ecfp4_tanimoto(mol_pred, mol_cond)
         results["sucos"] = compute_sucos(mol_probe=mol_pred, mol_ref=mol_cond)

@@ -43,15 +43,19 @@ def evaluate(mol_pred: Mol, frags: Mol) -> dict[str, float | int | str]:
 
     # needs Hydrogens
 
+    AddHs(mol_pred, addCoords=True)
+    AddHs(frags, addCoords=True)
+    df["fragment"].apply(lambda f: AddHs(f, addCoords=True))
+
     df["esp_sim"] = df["fragment"].apply(
         lambda f: compute_esp_sim(mol_probe=mol_pred, mol_ref=f)
     )
 
+    # does not need Hydrogens
+
     RemoveAllHs(mol_pred)
     RemoveAllHs(frags)
     df["fragment"].apply(RemoveAllHs)
-
-    # does not need Hydrogens
 
     df["shape_sim"] = df["fragment"].apply(
         lambda f: compute_shape_sim(mol_probe=mol_pred, mol_ref=f)
