@@ -36,20 +36,28 @@ def evaluate(mol_pred: Mol, frags: Mol) -> dict[str, float | int | str]:
     """Evaluate a molecule generated to cover a set of fragments."""
 
     SanitizeMol(mol_pred)
-    RemoveAllHs(mol_pred)
     SanitizeMol(frags)
-    RemoveAllHs(frags)
 
     fragment_mols = split_mol(frags)
     df = pd.DataFrame({"fragment": fragment_mols})
+
+    # needs Hydrogens
+
+    df["esp_sim"] = df["fragment"].apply(
+        lambda f: compute_esp_sim(mol_probe=mol_pred, mol_ref=f)
+    )
+
+    RemoveAllHs(mol_pred)
+    RemoveAllHs(frags)
+    df["fragment"].apply(RemoveAllHs)
+
+    # does not need Hydrogens
+
     df["shape_sim"] = df["fragment"].apply(
         lambda f: compute_shape_sim(mol_probe=mol_pred, mol_ref=f)
     )
     df["sucos"] = df["fragment"].apply(
         lambda f: compute_sucos(mol_probe=mol_pred, mol_ref=f)
-    )
-    df["esp_sim"] = df["fragment"].apply(
-        lambda f: compute_esp_sim(mol_probe=mol_pred, mol_ref=f)
     )
 
     summary = df[["sucos", "esp_sim", "shape_sim"]].describe()

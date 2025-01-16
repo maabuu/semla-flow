@@ -32,11 +32,20 @@ def evaluate_pair(
     results = {}
     try:
         SanitizeMol(mol_pred)
-        RemoveAllHs(mol_pred)
         SanitizeMol(mol_frag)
-        RemoveAllHs(mol_frag)
         SanitizeMol(mol_link)
+
+        # needs Hydrogens
+
+        results["esp_sim_frag"] = compute_esp_sim(mol_probe=mol_frag, mol_ref=mol_pred)
+        results["esp_sim_link"] = compute_esp_sim(mol_probe=mol_link, mol_ref=mol_pred)
+
+        RemoveAllHs(mol_pred)
+        RemoveAllHs(mol_frag)
         RemoveAllHs(mol_link)
+
+        # does not need Hydrogens
+
         results["tanimoto_frag"] = compute_ecfp4_tanimoto(mol_pred, mol_frag)
         results["tanimoto_link"] = compute_ecfp4_tanimoto(mol_pred, mol_link)
         results["shape_sim_frag"] = compute_shape_sim(
@@ -47,8 +56,7 @@ def evaluate_pair(
         )
         results["sucos_frag"] = compute_sucos(mol_probe=mol_frag, mol_ref=mol_pred)
         results["sucos_link"] = compute_sucos(mol_probe=mol_link, mol_ref=mol_pred)
-        results["esp_sim_frag"] = compute_esp_sim(mol_probe=mol_frag, mol_ref=mol_pred)
-        results["esp_sim_link"] = compute_esp_sim(mol_probe=mol_link, mol_ref=mol_pred)
+
         results["scaffold_pred"] = get_true_csk_scaffold(mol_pred)
         results["scaffold_link"] = get_true_csk_scaffold(mol_link)
         results["scaffold_conserved"] = (

@@ -30,15 +30,20 @@ def evaluate_pair(mol_pred: Mol, mol_cond: Mol, name: str) -> dict[str, float]:
     results = {}
     try:
         SanitizeMol(mol_pred)
-        RemoveAllHs(mol_pred)
         SanitizeMol(mol_cond)
-        RemoveAllHs(mol_cond)
-        results["tanimoto"] = compute_ecfp4_tanimoto(mol_pred, mol_cond)
 
-        results["sucos"] = compute_sucos(mol_probe=mol_pred, mol_ref=mol_cond)
+        # needs Hydrogens
+
         results["esp_sim"] = compute_esp_sim(mol_probe=mol_pred, mol_ref=mol_cond)
-        results["shape_sim"] = compute_shape_sim(mol_probe=mol_pred, mol_ref=mol_cond)
 
+        RemoveAllHs(mol_pred)
+        RemoveAllHs(mol_cond)
+
+        # does not need Hydrogens
+
+        results["tanimoto"] = compute_ecfp4_tanimoto(mol_pred, mol_cond)
+        results["sucos"] = compute_sucos(mol_probe=mol_pred, mol_ref=mol_cond)
+        results["shape_sim"] = compute_shape_sim(mol_probe=mol_pred, mol_ref=mol_cond)
         results["scaffold_pred"] = get_true_csk_scaffold(mol_pred)
         results["scaffold_cond"] = get_true_csk_scaffold(mol_cond)
         results["scaffold_conserved"] = (
