@@ -37,18 +37,18 @@ def evaluate_pair(
 
         # needs Hydrogens
 
-        AddHs(mol_pred, addCoords=True)
-        AddHs(mol_frag, addCoords=True)
-        AddHs(mol_link, addCoords=True)
+        mol_pred = AddHs(mol_pred, addCoords=True)
+        mol_frag = AddHs(mol_frag, addCoords=True)
+        mol_link = AddHs(mol_link, addCoords=True)
 
         results["esp_sim_frag"] = compute_esp_sim(mol_probe=mol_frag, mol_ref=mol_pred)
         results["esp_sim_link"] = compute_esp_sim(mol_probe=mol_link, mol_ref=mol_pred)
 
         # does not need Hydrogens
 
-        RemoveAllHs(mol_pred)
-        RemoveAllHs(mol_frag)
-        RemoveAllHs(mol_link)
+        mol_pred = RemoveAllHs(mol_pred)
+        mol_frag = RemoveAllHs(mol_frag)
+        mol_link = RemoveAllHs(mol_link)
 
         results["tanimoto_frag"] = compute_ecfp4_tanimoto(mol_pred, mol_frag)
         results["tanimoto_link"] = compute_ecfp4_tanimoto(mol_pred, mol_link)

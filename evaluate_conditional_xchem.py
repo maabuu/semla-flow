@@ -43,9 +43,9 @@ def evaluate(mol_pred: Mol, frags: Mol) -> dict[str, float | int | str]:
 
     # needs Hydrogens
 
-    AddHs(mol_pred, addCoords=True)
-    AddHs(frags, addCoords=True)
-    df["fragment"].apply(lambda f: AddHs(f, addCoords=True))
+    mol_pred = AddHs(mol_pred, addCoords=True)
+    frags = AddHs(frags, addCoords=True)
+    df["fragment"] = df["fragment"].apply(lambda f: AddHs(f, addCoords=True))
 
     df["esp_sim"] = df["fragment"].apply(
         lambda f: compute_esp_sim(mol_probe=mol_pred, mol_ref=f)
@@ -53,9 +53,9 @@ def evaluate(mol_pred: Mol, frags: Mol) -> dict[str, float | int | str]:
 
     # does not need Hydrogens
 
-    RemoveAllHs(mol_pred)
-    RemoveAllHs(frags)
-    df["fragment"].apply(RemoveAllHs)
+    mol_pred = RemoveAllHs(mol_pred)
+    frags = RemoveAllHs(frags)
+    df["fragment"] = df["fragment"].apply(RemoveAllHs)
 
     df["shape_sim"] = df["fragment"].apply(
         lambda f: compute_shape_sim(mol_probe=mol_pred, mol_ref=f)
@@ -64,10 +64,11 @@ def evaluate(mol_pred: Mol, frags: Mol) -> dict[str, float | int | str]:
         lambda f: compute_sucos(mol_probe=mol_pred, mol_ref=f)
     )
 
-    summary = df[["sucos", "esp_sim", "shape_sim"]].describe()
-    summary.columns = ["_".join(col).strip() for col in summary.columns.values]
-    results = summary.to_dict()
-    results["sucos_count"] = int(results["sucos_count"])
+    summary = df[["sucos", "esp_sim", "shape_sim"]].describe().T.reset_index()
+    summary = summary.melt(var_name="summary", value_name="value", id_vars="index")
+    summary["metric"] = summary["index"] + "_" + summary["summary"]
+    results = summary.set_index("metric")["value"].to_dict()
+
     results["smiles_pred"] = compute_smiles(mol_pred)
     results["scaffold_pred"] = get_true_csk_scaffold(mol_pred)
     return results
