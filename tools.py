@@ -131,15 +131,15 @@ def compute_ecfp4_tanimoto(mol_pred: Mol, mol_cond: Mol) -> float:
 
 def compute_sucos(mol_ref: Mol, mol_probe: Mol) -> float:
     """Compute the SuCOS score between two molecules."""
-    return get_sucos_score(mol_ref, mol_probe)
+    return get_sucos_score(mol_reference=mol_ref, mol_probe=mol_probe)
 
 
 def compute_shape_sim(mol_probe: Mol, mol_ref: Mol) -> float:
-    return GetShapeSim(mol_probe=mol_probe, mol_ref=mol_ref)
+    return GetShapeSim(prbMol=mol_probe, refMol=mol_ref)
 
 
 def compute_esp_sim(mol_probe: Mol, mol_ref: Mol) -> float:
-    return GetEspSim(mol_probe=mol_probe, mol_ref=mol_ref)
+    return GetEspSim(prbMol=mol_probe, refMol=mol_ref)
 
 
 def get_true_csk_scaffold(mol: Mol) -> str:
