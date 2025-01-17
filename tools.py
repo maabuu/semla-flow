@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 from espsim import GetEspSim, GetShapeSim
 from posebusters import PoseBusters
-from posebusters.modules.sucos import get_sucos_score
+from posebusters.modules.sucos import get_feature_map_score, get_sucos_score
 from rdkit.Chem import QED, Crippen, Descriptors, Lipinski, RemoveStereochemistry
 from rdkit.Chem.AllChem import DeleteSubstructs, GetMorganGenerator, ReplaceSubstructs
 from rdkit.Chem.rdchem import Mol
@@ -21,6 +21,11 @@ from rdkit.Chem.rdmolops import (
     RemoveAllHs,
     RemoveHs,
     SanitizeMol,
+)
+from rdkit.Chem.rdShapeHelpers import (
+    ShapeProtrudeDist,
+    ShapeTanimotoDist,
+    ShapeTverskyIndex,
 )
 from rdkit.Chem.Scaffolds import MurckoScaffold
 from rdkit.Chem.SpacialScore import SPS
@@ -134,8 +139,35 @@ def compute_sucos(mol_ref: Mol, mol_probe: Mol) -> float:
     return get_sucos_score(mol_reference=mol_ref, mol_probe=mol_probe)
 
 
-def compute_shape_sim(mol_probe: Mol, mol_ref: Mol) -> float:
-    return GetShapeSim(prbMol=mol_probe, refMol=mol_ref)
+def compute_feature_map_score(mol_ref: Mol, mol_probe: Mol) -> float:
+    """Compute the feature map score between two molecules."""
+
+    # Check how many of the features in the reference molecule are present in the probe molecule
+    feature_map_score = get_feature_map_score(mol_small=mol_ref, mol_large=mol_probe)
+    return float(feature_map_score)
+
+
+def compute_shape_tanimoto(mol1: Mol, mol2: Mol, ignore_h: bool = True) -> float:
+    # Symmetric metric
+    return 1 - ShapeTanimotoDist(mol1=mol1, mol2=mol2, ignoreHs=ignore_h)
+
+
+def compute_shape_protrusion(
+    mol_probe: Mol, mol_ref: Mol, ignore_h: bool = True
+) -> float:
+    # Note from Greg's blof: by default ShapeProtrudeDist will reorder the arguments so that
+    # it's always looking at the fraction of the larger shape protrudes from the smaller shape.
+    return 1 - ShapeProtrudeDist(
+        mol1=mol_probe, mol2=mol_ref, allowReordering=False, ignoreHs=ignore_h
+    )
+
+
+def compute_shape_added(mol_probe: Mol, mol_ref: Mol) -> float:
+    pass
+
+
+def compute_shape_missing(mol_probe: Mol, mol_ref: Mol) -> float:
+    pass
 
 
 def compute_esp_sim(mol_probe: Mol, mol_ref: Mol) -> float:
