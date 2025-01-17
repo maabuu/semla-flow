@@ -2,7 +2,7 @@
 
 import argparse
 import logging
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import pandas as pd
@@ -97,14 +97,15 @@ def main(input_file: Path, output_file: Path, debug=False):
     """Evaluate the molecules."""
 
     silence_rdkit()
-    blocks = open(input_file).read().split("$$$$\n")
+    blocks = open(input_file).read().strip().strip("\n").strip("$").split("$$$$\n")
     total = len(blocks)
 
     if debug:
         logger.warning("Debug mode enabled.")
         total = 100
 
-    with ProcessPoolExecutor(initializer=silence_rdkit) as executor:
+    # with ProcessPoolExecutor(initializer=silence_rdkit) as executor:
+    with ThreadPoolExecutor(initializer=silence_rdkit) as executor:
         futures = []
         for i, block in enumerate(tqdm(blocks, total=total, desc="Submitting jobs")):
             # if i < 200 or i > 220:
@@ -114,9 +115,7 @@ def main(input_file: Path, output_file: Path, debug=False):
             futures.append(executor.submit(evaluate_one, block))
 
         results = []
-        for future in tqdm(
-            as_completed(futures), total=len(futures), desc="Collecting jobs"
-        ):
+        for future in tqdm(as_completed(futures), total=len(futures), desc="Collecting jobs"):
             try:
                 results.append(future.result())
             except Exception as e:
