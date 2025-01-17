@@ -35,9 +35,7 @@ from rdkit.rdBase import DisableLog
 try:
     from rdkit.Contrib.SA_Score import sascorer
 except ImportError:
-    sys.path.append(
-        os.path.join(os.environ["CONDA_PREFIX"], "share", "RDKit", "Contrib")
-    )
+    sys.path.append(os.path.join(os.environ["CONDA_PREFIX"], "share", "RDKit", "Contrib"))
     from SA_Score import sascorer
 
 
@@ -61,9 +59,7 @@ def compute_uniqueness(smiles: list[str], total: int = 0) -> float:
     return len(set(smiles)) / total
 
 
-def compute_novelty(
-    smiles: list[str], reference_smiles: set[str], total: int = 0
-) -> float:
+def compute_novelty(smiles: list[str], reference_smiles: set[str], total: int = 0) -> float:
     """How many are not in the reference set?"""
     smiles = filter_smiles(smiles)
     total = total or len(smiles)
@@ -72,9 +68,7 @@ def compute_novelty(
     return sum(s not in reference_smiles for s in smiles) / total
 
 
-def compute_unique_novelty(
-    smiles: list[str], reference_smiles: set[str], total: int = 0
-) -> float:
+def compute_unique_novelty(smiles: list[str], reference_smiles: set[str], total: int = 0) -> float:
     """How many unique new molecules have we generated?"""
     smiles = filter_smiles(smiles)
     total = total or len(smiles)
@@ -152,14 +146,10 @@ def compute_shape_tanimoto(mol1: Mol, mol2: Mol, ignore_h: bool = True) -> float
     return 1 - ShapeTanimotoDist(mol1=mol1, mol2=mol2, ignoreHs=ignore_h)
 
 
-def compute_shape_protrusion(
-    mol_probe: Mol, mol_ref: Mol, ignore_h: bool = True
-) -> float:
-    # Note from Greg's blof: by default ShapeProtrudeDist will reorder the arguments so that
+def compute_shape_protrusion(mol_probe: Mol, mol_ref: Mol, ignore_h: bool = True) -> float:
+    # Note from Greg's blog: by default ShapeProtrudeDist will reorder the arguments so that
     # it's always looking at the fraction of the larger shape protrudes from the smaller shape.
-    return 1 - ShapeProtrudeDist(
-        mol1=mol_probe, mol2=mol_ref, allowReordering=False, ignoreHs=ignore_h
-    )
+    return 1 - ShapeProtrudeDist(mol1=mol_probe, mol2=mol_ref, allowReordering=False, ignoreHs=ignore_h)
 
 
 def compute_shape_added(mol_probe: Mol, mol_ref: Mol) -> float:
@@ -171,6 +161,12 @@ def compute_shape_missing(mol_probe: Mol, mol_ref: Mol) -> float:
 
 
 def compute_esp_sim(mol_probe: Mol, mol_ref: Mol) -> float:
+    """Compute the ESP similarity between two molecules.
+
+    References:
+    - Bolcato et al, 2022: https://pubs.acs.org/doi/10.1021/acs.jcim.1c01535
+    - Heid et al, 2021: https://github.com/hesther/espsim
+    """
     return GetEspSim(prbMol=mol_probe, refMol=mol_ref)
 
 
