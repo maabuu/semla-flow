@@ -14,7 +14,9 @@ from tqdm import tqdm
 from tools import (
     compute_ecfp4_tanimoto,
     compute_esp_sim,
-    compute_shape_sim,
+    compute_feature_map_score,
+    compute_shape_protrusion,
+    compute_shape_tanimoto,
     compute_smiles,
     compute_sucos,
     get_name,
@@ -24,9 +26,7 @@ from tools import (
 logger = logging.getLogger(__name__)
 
 
-def evaluate_pair(
-    mol_pred: Mol, mol_frag: Mol, mol_link: Mol, name: str
-) -> dict[str, float]:
+def evaluate_pair(mol_pred: Mol, mol_frag: Mol, mol_link: Mol, name: str) -> dict[str, float]:
     """Evaluate a pair of molecules."""
 
     results = {}
@@ -50,29 +50,51 @@ def evaluate_pair(
         mol_frag = RemoveAllHs(mol_frag)
         mol_link = RemoveAllHs(mol_link)
 
-        results["tanimoto_frag"] = compute_ecfp4_tanimoto(mol_pred, mol_frag)
-        results["tanimoto_link"] = compute_ecfp4_tanimoto(mol_pred, mol_link)
-        results["shape_sim_frag"] = compute_shape_sim(
-            mol_probe=mol_frag, mol_ref=mol_pred
-        )
-        results["shape_sim_link"] = compute_shape_sim(
-            mol_probe=mol_link, mol_ref=mol_pred
-        )
-        results["sucos_frag"] = compute_sucos(mol_probe=mol_frag, mol_ref=mol_pred)
-        results["sucos_link"] = compute_sucos(mol_probe=mol_link, mol_ref=mol_pred)
+        # symmetric
 
-        results["scaffold_pred"] = get_true_csk_scaffold(mol_pred)
-        results["scaffold_link"] = get_true_csk_scaffold(mol_link)
-        results["scaffold_conserved"] = (
-            results["scaffold_pred"] == results["scaffold_link"]
-        )
+        results["shape_tanimoto_frag"] = compute_shape_tanimoto(mol1=mol_frag, mol2=mol_pred)
+        results["shape_tanimoto_link"] = compute_shape_tanimoto(mol1=mol_link, mol2=mol_pred)
 
-        results["smiles_pred"] = compute_smiles(mol_pred)
-        results["smiles_link"] = compute_smiles(mol_link)
+        results["ecfp4_bit_tanimoto_frag"] = compute_ecfp4_tanimoto(mol_pred, mol_frag)
+        results["ecfp4_bit_tanimoto_link"] = compute_ecfp4_tanimoto(mol_pred, mol_link)
+
+        # non-symmetric
+
+        results["shape_protrusion_frag_1"] = compute_shape_protrusion(mol_probe=mol_pred, mol_ref=mol_frag, ignore_h=True)
+        results["shape_protrusion_frag_2"] = compute_shape_protrusion(mol_probe=mol_frag, mol_ref=mol_pred, ignore_h=True)
+        results["shape_protrusion_link_1"] = compute_shape_protrusion(mol_probe=mol_pred, mol_ref=mol_link, ignore_h=True)
+        results["shape_protrusion_link_2"] = compute_shape_protrusion(mol_probe=mol_link, mol_ref=mol_pred, ignore_h=True)
+
+        results["feat_map_score_frag_1"] = compute_feature_map_score(mol_probe=mol_pred, mol_ref=mol_frag)
+        results["feat_map_score_frag_2"] = compute_feature_map_score(mol_probe=mol_frag, mol_ref=mol_pred)
+        results["feat_map_score_link_1"] = compute_feature_map_score(mol_probe=mol_pred, mol_ref=mol_link)
+        results["feat_map_score_link_2"] = compute_feature_map_score(mol_probe=mol_link, mol_ref=mol_pred)
+
+        results["sucos_frag_1"] = compute_sucos(mol_probe=mol_pred, mol_ref=mol_frag)
+        results["sucos_frag_2"] = compute_sucos(mol_probe=mol_frag, mol_ref=mol_pred)
+        results["sucos_link_1"] = compute_sucos(mol_probe=mol_pred, mol_ref=mol_link)
+        results["sucos_link_2"] = compute_sucos(mol_probe=mol_link, mol_ref=mol_pred)
+
+        results["feat_map_score_frag_1"] = compute_feature_map_score(mol_probe=mol_pred, mol_ref=mol_frag)
+        results["feat_map_score_frag_2"] = compute_feature_map_score(mol_probe=mol_frag, mol_ref=mol_pred)
+        results["feat_map_score_link_1"] = compute_feature_map_score(mol_probe=mol_pred, mol_ref=mol_link)
+        results["feat_map_score_link_2"] = compute_feature_map_score(mol_probe=mol_link, mol_ref=mol_pred)
+
+        # info
+
         results["num_atoms_pred"] = mol_pred.GetNumHeavyAtoms()
         results["num_atoms_frag"] = mol_frag.GetNumHeavyAtoms()
         results["num_atoms_link"] = mol_link.GetNumHeavyAtoms()
+
+        results["smiles_pred"] = compute_smiles(mol_pred)
+        results["smiles_link"] = compute_smiles(mol_link)
+
+        results["scaffold_pred"] = get_true_csk_scaffold(mol_pred)
+        results["scaffold_link"] = get_true_csk_scaffold(mol_link)
+        results["scaffold_conserved"] = results["scaffold_pred"] == results["scaffold_link"]
+
         results["Reference molecule"] = name
+
         results["fail"] = 0
     except Exception as e:
         results["fail"] = 1
@@ -140,9 +162,7 @@ def main(
             futures.append(future)
 
         results = []
-        for future in tqdm(
-            as_completed(futures), total=len(futures), desc="Collecting jobs"
-        ):
+        for future in tqdm(as_completed(futures), total=len(futures), desc="Collecting jobs"):
             results.append(future.result())
 
     results_df = pd.DataFrame(results)
