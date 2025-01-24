@@ -272,15 +272,20 @@ def compute_chemical_and_physical_validity(mol: Mol) -> dict[str, bool]:
         "chemical": all(results[check] for check in checks_chemical),
         "physical": all(results[check] for check in checks_physical),
     }
-    chosen = [
-        "connected",
-        "chemical",
-        "physical",
-        # "internal_steric_clash",
-        # "internal_energy",
-        "ensemble_avg_energy",
-        "mol_pred_energy",
-        "energy_ratio",
-    ]
+    chosen = (
+        [
+            "connected",
+            "chemical",
+            "physical",
+            # "internal_steric_clash",
+            # "internal_energy",
+            "ensemble_avg_energy",
+            "mol_pred_energy",
+            "energy_ratio",
+        ]
+        + check_connected
+        + checks_chemical
+        + checks_physical
+    )
 
     return {key: results[key] for key in chosen}
