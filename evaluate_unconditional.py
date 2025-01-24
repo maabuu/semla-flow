@@ -3,6 +3,7 @@
 import argparse
 import logging
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
 
 import pandas as pd
@@ -110,6 +111,8 @@ def main(input_file: Path, output_file: Path, debug=False):
         for i, block in enumerate(tqdm(blocks, total=total, desc="Submitting jobs")):
             # if i < 200 or i > 220:
             #     continue
+            # if i < 29500:
+            #     continue
             if debug and i == total:
                 break
             futures.append(executor.submit(evaluate_one, block))
@@ -118,8 +121,10 @@ def main(input_file: Path, output_file: Path, debug=False):
         for future in tqdm(as_completed(futures), total=len(futures), desc="Collecting jobs"):
             try:
                 results.append(future.result())
-            except Exception as e:
-                results.append({"fail": 1, "error": str(e).replace("\n", " ")})
+            except BrokenProcessPool as exception:
+                raise exception
+            except Exception as exception:
+                results.append({"fail": 1, "error": str(exception).replace("\n", " ")})
 
     results_df = pd.DataFrame(results)
     if debug:

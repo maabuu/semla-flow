@@ -13,12 +13,14 @@ from tqdm import tqdm
 
 from tools import (
     compute_chemical_and_physical_validity,
+    compute_ecfp4_tanimoto,
     compute_esp_sim,
+    compute_feature_map_score,
     compute_lipinski_score,
     compute_logp,
     compute_qed_score,
     compute_sa_score,
-    compute_shape_sim,
+    compute_shape_tanimoto,
     compute_smiles,
     compute_spacial_score,
     compute_sucos,
@@ -50,6 +52,9 @@ def evaluate(mol_pred: Mol, frags: Mol) -> dict[str, float | int | str]:
     df["esp_sim"] = df["fragment"].apply(
         lambda f: compute_esp_sim(mol_probe=mol_pred, mol_ref=f)
     )
+    df["shape_sim"] = df["fragment"].apply(
+        lambda f: compute_shape_tanimoto(mol_probe=mol_pred, mol_ref=f)
+    )
 
     # does not need Hydrogens
 
@@ -57,14 +62,18 @@ def evaluate(mol_pred: Mol, frags: Mol) -> dict[str, float | int | str]:
     frags = RemoveAllHs(frags)
     df["fragment"] = df["fragment"].apply(RemoveAllHs)
 
-    df["shape_sim"] = df["fragment"].apply(
-        lambda f: compute_shape_sim(mol_probe=mol_pred, mol_ref=f)
-    )
     df["sucos"] = df["fragment"].apply(
         lambda f: compute_sucos(mol_probe=mol_pred, mol_ref=f)
     )
+    df["feature_map_score"] = df["fragment"].apply(
+        lambda f: compute_feature_map_score(mol_probe=mol_pred, mol_ref=f)
+    )
 
-    summary = df[["sucos", "esp_sim", "shape_sim"]].describe().T.reset_index()
+    summary = (
+        df[["sucos", "esp_sim", "shape_sim", "feature_map_score"]]
+        .describe()
+        .T.reset_index()
+    )
     summary = summary.melt(var_name="summary", value_name="value", id_vars="index")
     summary["metric"] = summary["index"] + "_" + summary["summary"]
     results = summary.set_index("metric")["value"].to_dict()
