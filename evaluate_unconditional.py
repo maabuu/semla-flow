@@ -21,6 +21,7 @@ from tools import (
     compute_smiles,
     compute_spacial_score,
     compute_weight,
+    count_hydrogens_added_by_rdkit,
     get_name,
     silence_rdkit,
 )
@@ -36,6 +37,8 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("predicted", type=Path, help=help_line)
     help_line = "Output file."
     parser.add_argument("--output", "-o", type=Path, help=help_line)
+    help_line = "Run on first N molecules only."
+    parser.add_argument("--n", "-n", type=int, help=help_line, default=None)
     help_line = "Enable debug mode."
     parser.add_argument("--debug", action="store_true", help=help_line)
     return parser.parse_args()
@@ -94,27 +97,20 @@ def evaluate_one(block: str) -> dict[str, float | int | str]:
     return results
 
 
-def main(input_file: Path, output_file: Path, debug=False):
+def main(input_file: Path, output_file: Path, n: int | None = None, debug: bool = False):
     """Evaluate the molecules."""
 
     silence_rdkit()
-    blocks = open(input_file).read().strip().strip("\n").strip("$").split("$$$$\n")
-    total = len(blocks)
+    blocks = open(input_file).read().rstrip().rstrip("\n").rstrip("\n").rstrip("$$$$").split("$$$$\n")
 
-    if debug:
-        logger.warning("Debug mode enabled.")
-        total = 100
+    if n and len(blocks) > n:
+        logger.warning("Running on first %d molecules in file only.", n)
+    blocks = blocks[:n]
 
     # with ProcessPoolExecutor(initializer=silence_rdkit) as executor:
     with ThreadPoolExecutor(initializer=silence_rdkit) as executor:
         futures = []
-        for i, block in enumerate(tqdm(blocks, total=total, desc="Submitting jobs")):
-            # if i < 200 or i > 220:
-            #     continue
-            # if i < 29500:
-            #     continue
-            if debug and i == total:
-                break
+        for i, block in enumerate(tqdm(blocks, total=len(blocks), desc="Submitting jobs")):
             futures.append(executor.submit(evaluate_one, block))
 
         results = []
@@ -136,4 +132,4 @@ def main(input_file: Path, output_file: Path, debug=False):
 
 if __name__ == "__main__":
     args = parse_arguments()
-    main(args.predicted, args.output, debug=args.debug)
+    main(args.predicted, args.output, n=args.n)
