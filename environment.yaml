@@ -6,15 +6,17 @@ channels:
 dependencies:
   - jupyterlab
   - nbstripout
-  - numpy
+  - numpy>=2
   - openbabel
-  - pandas
+  - pandas>=2
+  - pip
   - plotly
   - posebusters
   - pytest
   - python=3.11
   - pytorch
-  - rdkit
+  - rdkit==2024.03
+  - rich
   - ruff
   - scipy
   - seaborn
