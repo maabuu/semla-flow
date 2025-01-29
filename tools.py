@@ -2,7 +2,8 @@
 
 import os
 import sys
-from typing import Callable
+from copy import deepcopy
+from typing import Callable, Generator
 
 import numpy as np
 import pandas as pd
@@ -50,36 +51,26 @@ def silence_rdkit():
     DisableLog("rdApp.*")
 
 
-def compute_uniqueness(smiles: list[str], total: int = 0) -> float:
+def count_unique_elements(smiles: list[str]) -> float:
     """Compute the uniqueness of a list of SMILES strings."""
-    smiles = filter_smiles(smiles)
-    total = total or len(smiles)
-    if len(smiles) == 0:
-        return float("nan")
-    return len(set(smiles)) / total
+    return len(set(filter_smiles(smiles)))
 
 
-def compute_novelty(smiles: list[str], reference_smiles: set[str], total: int = 0) -> float:
+def count_novel_elements(smiles: list[str], reference_smiles: set[str]) -> float:
     """How many are not in the reference set?"""
-    smiles = filter_smiles(smiles)
-    total = total or len(smiles)
-    if len(smiles) == 0:
-        return float("nan")
-    return sum(s not in reference_smiles for s in smiles) / total
+    return sum(s not in reference_smiles for s in filter_smiles(smiles))
 
 
-def compute_unique_novelty(smiles: list[str], reference_smiles: set[str], total: int = 0) -> float:
+def count_unique_novel_elements(smiles: list[str], reference_smiles: set[str]) -> float:
     """How many unique new molecules have we generated?"""
-    smiles = filter_smiles(smiles)
-    total = total or len(smiles)
-    if len(smiles) == 0:
-        return float("nan")
-    return len(set(smiles) - reference_smiles) / total
+    return len(set(filter_smiles(smiles)) - reference_smiles)
 
 
-def filter_smiles(smiles: list[str]) -> list[str]:
-    """Filter out invalid SMILES strings."""
-    return [s for s in smiles if s not in {None, "", pd.NA, np.nan}]
+def filter_smiles(smiles: list[str]) -> Generator[int, None, None]:
+    """Generator to filter out invalid SMILES strings."""
+    for s in smiles:
+        if s not in {None, "", pd.NA, np.nan}:
+            yield s
 
 
 ecfp4_generator = GetMorganGenerator(radius=2)
@@ -248,7 +239,11 @@ buster = PoseBusters("mol")
 def compute_chemical_and_physical_validity(mol: Mol) -> dict[str, bool]:
     """Compute the chemical and physical validity of a molecule."""
 
+    num_h_added = count_hydrogens_added_by_rdkit(mol)
+
     results: dict[str, bool] = buster.bust(mol, full_report=True).iloc[0].to_dict()
+    results["num_h_added"] = num_h_added
+    results["no_h_added"] = num_h_added == 0
 
     # group checks together
     check_connected = [
@@ -257,6 +252,7 @@ def compute_chemical_and_physical_validity(mol: Mol) -> dict[str, bool]:
     checks_chemical = [
         "mol_pred_loaded",
         "sanitization",
+        "no_h_added",
         "inchi_convertible",
     ]
     checks_physical = [
@@ -268,17 +264,15 @@ def compute_chemical_and_physical_validity(mol: Mol) -> dict[str, bool]:
         "internal_energy",
     ]
     results |= {
-        "connected": all(results[check] for check in check_connected),
-        "chemical": all(results[check] for check in checks_chemical),
-        "physical": all(results[check] for check in checks_physical),
+        "connected": all(results[check] is True for check in check_connected),
+        "chemical": all(results[check] is True for check in checks_chemical),
+        "physical": all(results[check] is True for check in checks_physical),
     }
     chosen = (
         [
             "connected",
             "chemical",
             "physical",
-            # "internal_steric_clash",
-            # "internal_energy",
             "ensemble_avg_energy",
             "mol_pred_energy",
             "energy_ratio",
@@ -286,6 +280,23 @@ def compute_chemical_and_physical_validity(mol: Mol) -> dict[str, bool]:
         + check_connected
         + checks_chemical
         + checks_physical
+        + [
+            "num_h_added",
+            "no_h_added",
+        ]
     )
 
     return {key: results[key] for key in chosen}
+
+
+def count_hydrogens_added_by_rdkit(mol: Mol) -> int:
+    """Count the number of Hydrogens added by RDKit during sanitization."""
+
+    mol_test = deepcopy(mol)
+    num_hydrogens_before = mol_test.GetNumHeavyAtoms() - mol_test.GetNumAtoms()
+    SanitizeMol(mol_test, catchErrors=True)
+    num_hydrogens_after = mol_test.GetNumHeavyAtoms() - mol_test.GetNumAtoms()
+
+    num_hydrogens_added = num_hydrogens_after - num_hydrogens_before
+
+    return num_hydrogens_added
