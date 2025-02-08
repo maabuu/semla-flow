@@ -2,6 +2,7 @@
 
 import os
 import sys
+from collections import Counter
 from copy import deepcopy
 from typing import Callable, Generator
 
@@ -228,6 +229,21 @@ def compute_lipinski_score(mol: Mol) -> float:
         return float("nan")
 
 
+def compute_ghose_filter(mol: Mol) -> float:
+    try:
+        # lop G between -0.4 and 5.6
+        rule_1 = -0.4 <= Crippen.MolLogP(mol) <= 5.6
+        # molecular weight between 160 and 480
+        rule_2 = 160 <= Descriptors.ExactMolWt(mol) <= 480
+        # molecular refractivity between 40 and 130
+        rule_3 = 40 <= Crippen.MolMR(mol) <= 130
+        # total number of atoms between 20 and 70
+        rule_4 = 20 <= mol.GetNumAtoms() <= 70
+        return float(all([rule_1, rule_2, rule_3, rule_4]))
+    except Exception:
+        return float("nan")
+
+
 def compute_weight(mol: Mol) -> Mol:
     """Compute the molecular weight of a molecule."""
     return Descriptors.ExactMolWt(mol)
@@ -239,11 +255,11 @@ buster = PoseBusters("mol")
 def compute_chemical_and_physical_validity(mol: Mol) -> dict[str, bool]:
     """Compute the chemical and physical validity of a molecule."""
 
-    num_h_added = count_hydrogens_added_by_rdkit(mol)
+    # num_h_added = count_hydrogens_added_by_rdkit(mol)
 
     results: dict[str, bool] = buster.bust(mol, full_report=True).iloc[0].to_dict()
-    results["num_h_added"] = num_h_added
-    results["no_h_added"] = num_h_added == 0
+    # results["num_h_added"] = num_h_added
+    # results["no_h_added"] = num_h_added == 0
 
     # group checks together
     check_connected = [
@@ -252,8 +268,8 @@ def compute_chemical_and_physical_validity(mol: Mol) -> dict[str, bool]:
     checks_chemical = [
         "mol_pred_loaded",
         "sanitization",
-        "no_h_added",
-        "inchi_convertible",
+        # "no_h_added",
+        # "inchi_convertible",
     ]
     checks_physical = [
         "bond_lengths",
@@ -263,6 +279,34 @@ def compute_chemical_and_physical_validity(mol: Mol) -> dict[str, bool]:
         "double_bond_flatness",
         "internal_energy",
     ]
+    values = [
+        "passes_valence_checks",
+        "passes_kekulization",
+        "number_bonds",
+        "shortest_bond_relative_length",
+        "longest_bond_relative_length",
+        "number_short_outlier_bonds",
+        "number_long_outlier_bonds",
+        "number_angles",
+        "most_extreme_relative_angle",
+        "number_outlier_angles",
+        "number_noncov_pairs",
+        "shortest_noncovalent_relative_distance",
+        "number_clashes",
+        "number_valid_bonds",
+        "number_valid_angles",
+        "number_valid_noncov_pairs",
+        "number_aromatic_rings_checked",
+        "number_aromatic_rings_pass",
+        "aromatic_ring_maximum_distance_from_plane",
+        "number_double_bonds_checked",
+        "number_double_bonds_pass",
+        "double_bond_maximum_distance_from_plane",
+        "ensemble_avg_energy",
+        "mol_pred_energy",
+        "energy_ratio",
+    ]
+
     results |= {
         "connected": all(results[check] is True for check in check_connected),
         "chemical": all(results[check] is True for check in checks_chemical),
@@ -277,6 +321,7 @@ def compute_chemical_and_physical_validity(mol: Mol) -> dict[str, bool]:
             "mol_pred_energy",
             "energy_ratio",
         ]
+        + values
         + check_connected
         + checks_chemical
         + checks_physical
@@ -289,14 +334,32 @@ def compute_chemical_and_physical_validity(mol: Mol) -> dict[str, bool]:
     return {key: results[key] for key in chosen}
 
 
+def count_radicals(mol: Mol) -> Mol:
+    """Count the number of radicals in a molecule."""
+
+    return sum(atom.GetNumRadicalElectrons() for atom in mol.GetAtoms())
+
+
+def hydrate_radicals(mol: Mol) -> Mol:
+    """Hydrate radicals in a molecule."""
+
+    for atom in mol.GetAtoms():
+        num_atom_radicals = atom.GetNumRadicalElectrons()
+        if num_atom_radicals:
+            atom.SetNumExplicitHs(atom.GetNumExplicitHs() + num_atom_radicals)
+            atom.SetNumRadicalElectrons(0)
+    SanitizeMol(mol)
+    return mol
+
+
+def count_rings(mol: Mol) -> str:
+    """Count the number of rings in a molecule."""
+
+    sizes = [len(ring) for ring in mol.GetRingInfo().AtomRings()]
+    return "|".join(f"{s}={c}" for s, c in Counter(sizes).items())
+
+
 def count_hydrogens_added_by_rdkit(mol: Mol) -> int:
-    """Count the number of Hydrogens added by RDKit during sanitization."""
+    """Count the number of hydrogens added by RDKit."""
 
-    mol_test = deepcopy(mol)
-    num_hydrogens_before = mol_test.GetNumHeavyAtoms() - mol_test.GetNumAtoms()
-    SanitizeMol(mol_test, catchErrors=True)
-    num_hydrogens_after = mol_test.GetNumHeavyAtoms() - mol_test.GetNumAtoms()
-
-    num_hydrogens_added = num_hydrogens_after - num_hydrogens_before
-
-    return num_hydrogens_added
+    return AddHs(mol).GetNumAtoms() - mol.GetNumAtoms()
