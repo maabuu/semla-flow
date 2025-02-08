@@ -5,15 +5,15 @@
 #SBATCH --chdir=/vols/opig/users/buttensc/Storage/Projects/semla-flow
 
 #SBATCH --clusters=swan
-#SBATCH --nodelist=naga05.cpu.stats.ox.ac.uk
+#S BATCH --nodelist=naga04.cpu.stats.ox.ac.uk
 #SBATCH --partition=high-opig-cpu
 
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=34
-#SBATCH --mem=340GB
+#SBATCH --mem=100GB
 
-#SBATCH --array=1-100%1
+#S BATCH --array=1-100%100
 
 #SBATCH --output=/vols/opig/users/buttensc/Storage/Projects/semla-flow/slurm/evaluation_individually_%A_%a.out
 #SBATCH --error=/vols/opig/users/buttensc/Storage/Projects/semla-flow/slurm/evaluation_individually_%A_%a.err
@@ -43,30 +43,31 @@ else
     conda activate
 fi
 
+
 # update env
 env=evaluation
 if [ ! -d "$prefix/envs/$env" ]; then
-    mamba create -n $env python=3.12 plotly rdkit pandas jupyterlab tqdm posebusters openbabel --yes
+    mamba create -n $env -f environment.yml --yes
 else
     # do nothing
     echo "Environment exists"
+    mamba env update -n $env -f environment.yml --prune --yes
 fi
 mamba activate $env
-
 
 echo "Start task $SLURM_ARRAY_TASK_ID"
 
 cd /vols/opig/users/buttensc/Storage/Projects/semla-flow/predictions
 
-id=$SLURM_ARRAY_TASK_ID
-files=($(find . -maxdepth 4 -type f -name "*.sdf" | sort))
-input_file=${files[$id]}
+# id=$SLURM_ARRAY_TASK_ID
+# files=($(find . -maxdepth 4 -type f -name "*.sdf" | sort))
+# input_file=${files[$id]}
 
-# check if the file exists
-if [ ! -f $input_file ]; then
-    echo "File not found"
-    exit 1
-fi
+# # check if the file exists
+# if [ ! -f $input_file ]; then
+#     echo "File not found"
+#     exit 1
+# fi
 
 # # check if output file exists already
 # output_file=${input_file%.*}.csv
@@ -75,6 +76,18 @@ fi
 #     exit 1
 # fi
 
-python ../evaluate_unconditional.py $input_file
+python evaluate_unconditional.py predictions/unconditional/gcdm/gcdm_100000_predictions.sdf --n=$limit
+python evaluate_unconditional.py predictions/unconditional/eqgat/eqgat_100000_predictions.sdf --n=$limit
+python evaluate_unconditional.py predictions/unconditional/geoldm/geoldm_100000_predictions.sdf --n=$limit
+python evaluate_unconditional.py predictions/unconditional/molflow/molflow_100000_predictions.sdf --n=$limit
+python evaluate_unconditional.py predictions/unconditional/semlaflow/semlaflow_100000_predictions.sdf --n=$limit
 
-echo "Done task $SLURM_ARRAY_TASK_ID"
+python evaluate_unconditional.py predictions/unconditional/semlaflow/semlaflow_100000_predictions_optimized.sdf --n=$limit
+python evaluate_unconditional.py predictions/unconditional/molflow/molflow_100000_predictions_optimized.sdf --n=$limit
+python evaluate_unconditional.py predictions/unconditional/geoldm/geoldm_100000_predictions_optimized.sdf --n=$limit
+python evaluate_unconditional.py predictions/unconditional/gcdm/gcdm_100000_predictions_optimized.sdf --n=$limit
+python evaluate_unconditional.py predictions/unconditional/eqgat/eqgat_100000_predictions_optimized.sdf --n=$limit
+
+# python ../evaluate_unconditional.py $input_file
+
+# echo "Done task $SLURM_ARRAY_TASK_ID"
