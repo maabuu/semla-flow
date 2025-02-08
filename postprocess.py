@@ -6,16 +6,20 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_compl
 from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
 
-from rdkit.Chem.MolStandardize.rdMolStandardize import LargestFragmentChooser
+from rdkit.Chem.MolStandardize.rdMolStandardize import CleanupParameters, LargestFragmentChooser
 from rdkit.Chem.rdchem import Mol
 from rdkit.Chem.rdForceFieldHelpers import MMFFOptimizeMolecule
 from rdkit.Chem.rdmolfiles import MolFromMolBlock, MolToMolBlock
-from rdkit.Chem.rdmolops import AddHs
+from rdkit.Chem.rdmolops import AddHs, SanitizeMol
 from tqdm import tqdm
 
 from tools import silence_rdkit
 
 logger = logging.getLogger(__name__)
+
+params = CleanupParameters()
+params.largestFragmentChooserCountHeavyAtomsOnly = True
+params.preferOrganic = True
 largest_fragment_chooser = LargestFragmentChooser()
 
 
@@ -39,15 +43,17 @@ def optimize_molecule(block: str, max_iters: int = 100000) -> Mol:
     results["pass"] = False
 
     try:
-        # sanitize molecule - this includes adjusting Hydrogens
-        mol = MolFromMolBlock(block, sanitize=True, removeHs=False, strictParsing=True)
+        mol = MolFromMolBlock(block, sanitize=False, removeHs=False, strictParsing=False)
         assert mol is not None
 
         # pick largest fragment
-        largest_mol = largest_fragment_chooser.choose(mol)
+        largest_fragment_chooser.chooseInPlace(mol)
+
+        # sanitize molecule -  this includes adjusting Hydrogens
+        SanitizeMol(mol, catchErrors=False)
 
         # add hydrogens and optimize
-        mol = AddHs(largest_mol, addCoords=True)
+        mol = AddHs(mol, addCoords=True)
         result = MMFFOptimizeMolecule(mol, maxIters=max_iters)
 
         if result == -1:
@@ -69,7 +75,7 @@ def optimize_molecule(block: str, max_iters: int = 100000) -> Mol:
 def main(input_file: Path, output_file: Path | None = None, debug: bool = False):
     """Run energy minimization on the molecules."""
 
-    blocks = open(input_file).read().strip().strip("\n").strip("$").split("$$$$\n")
+    blocks = open(input_file).read().rstrip().rstrip("\n").rstrip("\n").rstrip("$$$$").split("$$$$\n")
     total = len(blocks)
 
     if debug:
@@ -96,11 +102,9 @@ def main(input_file: Path, output_file: Path | None = None, debug: bool = False)
     # save optimized molecules
     output_file = output_file or input_file.with_stem(input_file.stem + "_optimized")
 
+    output_blocks = "$$$$\n".join([result["mol"] for result in results if result["pass"]])
     with open(output_file, "w") as writer:
-        for result in results:
-            if result["pass"]:
-                writer.write(result["mol"])
-                writer.write("$$$$\n")
+        writer.write(output_blocks)
 
 
 if __name__ == "__main__":
