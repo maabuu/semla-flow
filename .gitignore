@@ -37,3 +37,7 @@ nohup.out
 # Slurm submission scripts and logs
 subslurm/
 slurm-*
+
+# Data files
+*.csv
+*.sdf
