@@ -34,6 +34,9 @@ notebooks/lightning_logs/
 wandb/
 nohup.out
 
+# Cache files
+.nfs*
+
 # Slurm submission scripts and logs
 subslurm/
 slurm-*
