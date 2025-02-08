@@ -4,7 +4,14 @@ channels:
   - pytorch
   - nvidia
 dependencies:
+  - bokeh
+  - colorcet
+  - datashader
+  - holoviews
+  - ipywidgets
+  - jupyter
   - jupyterlab
+  - matplotlib
   - nbstripout
   - numpy>=2
   - openbabel
@@ -13,13 +20,17 @@ dependencies:
   - plotly
   - posebusters
   - pytest
+  - python-kaleido
   - python=3.11
   - pytorch
-  - rdkit==2024.03
+  - rdkit>=2024.09.5
   - rich
   - ruff
+  - scikit-image
+  - scikit-learn
   - scipy
   - seaborn
   - tqdm
+  - umap-learn
   - pip:
       - git+https://github.com/hesther/espsim.git
