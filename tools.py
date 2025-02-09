@@ -306,9 +306,9 @@ def compute_posebusters_validity(mol: Mol) -> dict[str, bool]:
     ]
 
     results |= {
-        "connected": all(results[check] is True for check in check_connected),
-        "chemical": all(results[check] is True for check in checks_chemical),
-        "physical": all(results[check] is True for check in checks_physical),
+        "connected": int(all(results[check] is True for check in check_connected)),
+        "chemical": int(all(results[check] is True for check in checks_chemical)),
+        "physical": int(all(results[check] is True for check in checks_physical)),
     }
     chosen = (
         [
