@@ -337,6 +337,7 @@ def count_radicals(mol: Mol) -> Mol:
 def hydrate_radicals(mol: Mol) -> Mol:
     """Hydrate radicals in a molecule."""
 
+    SanitizeMol(mol)
     for atom in mol.GetAtoms():
         num_atom_radicals = atom.GetNumRadicalElectrons()
         if num_atom_radicals:
