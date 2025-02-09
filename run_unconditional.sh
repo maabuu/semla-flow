@@ -12,12 +12,12 @@ limit=100000000
 # limit=50
 
 nice -n 20 python evaluate_unconditional.py predictions/unconditional/semlaflow/semlaflow_100000_predictions_optimized.sdf --n=$limit
-nice -n 20 python evaluate_unconditional.py predictions/unconditional/molflow/molflow_100000_predictions_optimized.sdf --n=$limit
+nice -n 20 python evaluate_unconditional.py predictions/unconditional/flowmol/flowmol_100000_predictions_optimized.sdf --n=$limit
 nice -n 20 python evaluate_unconditional.py predictions/unconditional/geoldm/geoldm_100000_predictions_optimized.sdf --n=$limit
 nice -n 20 python evaluate_unconditional.py predictions/unconditional/gcdm/gcdm_100000_predictions_optimized.sdf --n=$limit
 nice -n 20 python evaluate_unconditional.py predictions/unconditional/eqgat/eqgat_100000_predictions_optimized.sdf --n=$limit
 nice -n 20 python evaluate_unconditional.py predictions/unconditional/semlaflow/semlaflow_100000_predictions.sdf --n=$limit
-nice -n 20 python evaluate_unconditional.py predictions/unconditional/molflow/molflow_100000_predictions.sdf --n=$limit
+nice -n 20 python evaluate_unconditional.py predictions/unconditional/flowmol/flowmol_100000_predictions.sdf --n=$limit
 nice -n 20 python evaluate_unconditional.py predictions/unconditional/geoldm/geoldm_100000_predictions.sdf --n=$limit
 nice -n 20 python evaluate_unconditional.py predictions/unconditional/gcdm/gcdm_100000_predictions.sdf --n=$limit
 nice -n 20 python evaluate_unconditional.py predictions/unconditional/eqgat/eqgat_100000_predictions.sdf --n=$limit
