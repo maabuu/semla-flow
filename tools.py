@@ -252,14 +252,10 @@ def compute_weight(mol: Mol) -> Mol:
 buster = PoseBusters("mol")
 
 
-def compute_chemical_and_physical_validity(mol: Mol) -> dict[str, bool]:
+def compute_posebusters_validity(mol: Mol) -> dict[str, bool]:
     """Compute the chemical and physical validity of a molecule."""
 
-    # num_h_added = count_hydrogens_added_by_rdkit(mol)
-
     results: dict[str, bool] = buster.bust(mol, full_report=True).iloc[0].to_dict()
-    # results["num_h_added"] = num_h_added
-    # results["no_h_added"] = num_h_added == 0
 
     # group checks together
     check_connected = [
@@ -268,7 +264,9 @@ def compute_chemical_and_physical_validity(mol: Mol) -> dict[str, bool]:
     checks_chemical = [
         "mol_pred_loaded",
         "sanitization",
-        # "no_h_added",
+        # "connected",
+        # "all_hydrogens",
+        # "no_radicals",
         # "inchi_convertible",
     ]
     checks_physical = [
@@ -325,10 +323,6 @@ def compute_chemical_and_physical_validity(mol: Mol) -> dict[str, bool]:
         + check_connected
         + checks_chemical
         + checks_physical
-        + [
-            "num_h_added",
-            "no_h_added",
-        ]
     )
 
     return {key: results[key] for key in chosen}

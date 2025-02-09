@@ -18,10 +18,10 @@ from rich.logging import RichHandler
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, TaskProgressColumn, TextColumn, TimeRemainingColumn, track
 
 from tools import (
-    compute_chemical_and_physical_validity,
     compute_ghose_filter,
     compute_lipinski_score,
     compute_logp,
+    compute_posebusters_validity,
     compute_qed_score,
     compute_sa_score,
     compute_smiles,
@@ -69,7 +69,7 @@ def parse_arguments() -> argparse.Namespace:
     help_line = "Run on first N molecules only."
     parser.add_argument("--n", "-n", type=int, help=help_line, default=None)
     help_line = "Disable PB checks."
-    parser.add_argument("--nopb", action="store_false", help=help_line)
+    parser.add_argument("--nopb", action="store_false", help=help_line)  # by default PB checks on, if flag set then off
     help_line = "Logging level."
     parser.add_argument("--logging", "-l", type=int, help=help_line, default=logging.CRITICAL)
     help_line = "Enable debug mode."
@@ -137,7 +137,8 @@ def evaluate_one(block: str, pb=True) -> dict[str, float | int | str]:
     if pb:
         try:
             mol = MolFromMolBlock(block, sanitize=False, removeHs=False, strictParsing=False)
-            results |= compute_chemical_and_physical_validity(mol)
+            posebuster_results = compute_posebusters_validity(mol)
+            results = posebuster_results | results
         except Exception as e:
             results["error"] = str(e).replace("\n", " ")
             return results
