@@ -82,17 +82,17 @@ def evaluate_one(block: str, pb=True) -> dict[str, float | int | str]:
 
     results = {}
     results["name"] = block.split("\n", 2)[0]
-    results["loads"] = 0
-    results["sanitizes"] = 0
-    results["connected"] = 0
-    results["all_hydrogens"] = 0
-    results["no_radicals"] = 0
-    results["errorfree"] = 0
+    results["loads"] = pd.NA
+    results["sanitizes"] = pd.NA
+    results["connected"] = pd.NA
+    results["all_hydrogens"] = pd.NA
+    results["no_radicals"] = pd.NA
+    results["errorfree"] = pd.NA
 
     try:
         mol = MolFromMolBlock(block, sanitize=False, removeHs=False, strictParsing=False)
         assert mol is not None
-        results["loads"] = 1
+        results["loads"] = True
     except Exception as e:
         results["error"] = str(e).replace("\n", " ")
         return results
@@ -101,10 +101,10 @@ def evaluate_one(block: str, pb=True) -> dict[str, float | int | str]:
         mol = MolFromMolBlock(block, sanitize=False, removeHs=False, strictParsing=False)
         mol.RemoveAllConformers()
         SanitizeMol(mol, catchErrors=False)
-        results["sanitizes"] = 1
-        results["all_hydrogens"] = int((AddHs(mol).GetNumAtoms() - mol.GetNumAtoms()) == 0)
-        results["no_radicals"] = int(count_radicals(mol) == 0)
-        results["connected"] = int(len(GetMolFrags(mol, asMols=False, sanitizeFrags=False)) == 1)
+        results["sanitizes"] = True
+        results["all_hydrogens"] = (AddHs(mol).GetNumAtoms() - mol.GetNumAtoms()) == 0
+        results["no_radicals"] = count_radicals(mol) == 0
+        results["connected"] = len(GetMolFrags(mol, asMols=False, sanitizeFrags=False)) == 1
     except Exception as e:
         results["error"] = str(e).replace("\n", " ")
         return results
@@ -143,7 +143,7 @@ def evaluate_one(block: str, pb=True) -> dict[str, float | int | str]:
             results["error"] = str(e).replace("\n", " ")
             return results
 
-    results["errorfree"] = 1
+    results["errorfree"] = True
     return results
 
 

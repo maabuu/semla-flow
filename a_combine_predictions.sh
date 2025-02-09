@@ -1,7 +1,7 @@
 
 # EQGAT - convert and combine xyz files
 conda activate evaluation
-cd /homes/buttensc/Projects/semla-flow/predictions/unconditional/eqgat/raw
+cd predictions
 for i in {0..19}
 do
     echo "Processing batch ${i}..."
@@ -12,7 +12,7 @@ obabel combined_batch_*.sdf -O ../eqgat_100000_predictions.sdf
 
 # GEOLDM - convert and combine txt files
 conda activate evaluation
-cd /homes/buttensc/Projects/semla-flow/predictions/unconditional/geoldm/raw
+cd predictions
 for i in {0..9}
 do
     echo "Processing batch ${i}..."
