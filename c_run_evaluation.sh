@@ -7,7 +7,9 @@ limit=100000000
 # limit=1000
 nice=20
 
-files=$(ls data/02_postprocessed/*.sdf)
+files=$(ls data/01_raw/*.sdf)
+# files=$(ls data/02_postprocessed/*.sdf)
+files=$(echo "${files[@]}" | tr ' ' '\n' | tac | tr '\n' ' ')
 for file in $files; do
     file_name=$(basename $file)
     echo "Evaluating $file_name"
@@ -20,7 +22,9 @@ done
 
 files=$(ls data/01_raw/*.sdf)
 files_pp=$(ls data/02_postprocessed/*.sdf)
+# files=$files_pp
 files="$files $files_pp"
+files=$(echo "${files[@]}" | tr ' ' '\n' | tac | tr '\n' ' ')
 for file in $files; do
     file_name=$(basename $file)
     echo "Describing $file_name"
