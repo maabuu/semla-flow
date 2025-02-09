@@ -20,3 +20,4 @@ do
     echo "Done with batch ${i}..."
 done
 obabel combined_batch_*.sdf -O ../geoldm_100000_predictions.sdf
+rm combined_batch_*.sdf
