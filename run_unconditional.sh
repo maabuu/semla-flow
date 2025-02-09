@@ -10,7 +10,7 @@ cd /homes/buttensc/Projects/semla-flow/
 
 limit=100000000
 # limit=50
-limit=1000
+# limit=1000
 nice=20
 
 nice -n $nice python evaluate_unconditional.py predictions/unconditional/eqgat/eqgat_100000_predictions.sdf --n=$limit
@@ -19,16 +19,17 @@ nice -n $nice python evaluate_unconditional.py predictions/unconditional/gcdm/gc
 nice -n $nice python evaluate_unconditional.py predictions/unconditional/geoldm/geoldm_100000_predictions.sdf --n=$limit
 nice -n $nice python evaluate_unconditional.py predictions/unconditional/semlaflow/semlaflow_100000_predictions.sdf --n=$limit
 
-nice -n $nice python evaluate_unconditional.py predictions/unconditional/eqgat/eqgat_100000_predictions_optimized.sdf --n=$limit
-nice -n $nice python evaluate_unconditional.py predictions/unconditional/flowmol/flowmol_100000_predictions_optimized.sdf --n=$limit
-nice -n $nice python evaluate_unconditional.py predictions/unconditional/gcdm/gcdm_100000_predictions_optimized.sdf --n=$limit
-nice -n $nice python evaluate_unconditional.py predictions/unconditional/geoldm/geoldm_100000_predictions_optimized.sdf --n=$limit
-nice -n $nice python evaluate_unconditional.py predictions/unconditional/semlaflow/semlaflow_100000_predictions_optimized.sdf --n=$limit
+# nice -n $nice python evaluate_unconditional.py predictions/unconditional/eqgat/eqgat_100000_predictions_optimized.sdf --n=$limit
+# nice -n $nice python evaluate_unconditional.py predictions/unconditional/flowmol/flowmol_100000_predictions_optimized.sdf --n=$limit
+# nice -n $nice python evaluate_unconditional.py predictions/unconditional/gcdm/gcdm_100000_predictions_optimized.sdf --n=$limit
+# nice -n $nice python evaluate_unconditional.py predictions/unconditional/geoldm/geoldm_100000_predictions_optimized.sdf --n=$limit
+# nice -n $nice python evaluate_unconditional.py predictions/unconditional/semlaflow/semlaflow_100000_predictions_optimized.sdf --n=$limit
 
+nice -n $nice python evaluate_unconditional.py data/unconditional/geom-drugs/all.sdf --n=$limit
+nice -n $nice python evaluate_unconditional.py data/unconditional/geom-drugs/all_optimized.sdf --n=$limit
 nice -n $nice python evaluate_unconditional.py data/unconditional/drugbank/all_structures_3d_optimized.sdf --n=$limit
 nice -n $nice python evaluate_unconditional.py data/unconditional/drugbank/all_structures_3d.sdf --n=$limit
 nice -n $nice python evaluate_unconditional.py data/unconditional/drugbank/approved_structures_2d.sdf --n=$limit
-nice -n $nice python evaluate_unconditional.py data/unconditional/geom-drugs/all.sdf --n=$limit
 nice -n $nice python evaluate_unconditional.py data/unconditional/geom-drugs/train.sdf --n=$limit
 
 
