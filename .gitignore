@@ -5,6 +5,7 @@ datasets/
 wandb/
 output/
 plots/
+archive_conditional/
 predictions/
 evaluation/
 slurm/
