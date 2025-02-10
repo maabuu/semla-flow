@@ -3,19 +3,24 @@
 import os
 import sys
 from collections import Counter
-from copy import deepcopy
 from typing import Callable, Generator
 
 import numpy as np
 import pandas as pd
+import rdkit
 from espsim import GetEspSim, GetShapeSim
 from posebusters import PoseBusters
 from posebusters.modules.sucos import get_feature_map_score, get_sucos_score
+from rdkit import Chem
 from rdkit.Chem import QED, Crippen, Descriptors, Lipinski, RemoveStereochemistry
-from rdkit.Chem.AllChem import DeleteSubstructs, GetMorganGenerator, ReplaceSubstructs
-from rdkit.Chem.rdchem import Mol
+from rdkit.Chem.AllChem import DeleteSubstructs, GetMolFrags, GetMorganGenerator, ReplaceSubstructs
+from rdkit.Chem.Draw import MolsToGridImage
+from rdkit.Chem.MolStandardize.rdMolStandardize import CleanupParameters, LargestFragmentChooser
+from rdkit.Chem.rdchem import BondStereo, Mol
+from rdkit.Chem.rdDistGeom import EmbedMultipleConfs
+from rdkit.Chem.rdForceFieldHelpers import MMFFOptimizeMolecule
 from rdkit.Chem.rdMolDescriptors import CalcNumRotatableBonds
-from rdkit.Chem.rdmolfiles import MolFromSmarts, MolToSmiles
+from rdkit.Chem.rdmolfiles import MolFromMolBlock, MolFromMolFile, MolFromSmarts, MolToMolBlock, MolToSmiles
 from rdkit.Chem.rdmolops import (
     AddHs,
     CombineMols,
@@ -32,7 +37,7 @@ from rdkit.Chem.rdShapeHelpers import (
 from rdkit.Chem.Scaffolds import MurckoScaffold
 from rdkit.Chem.SpacialScore import SPS
 from rdkit.DataStructs import TanimotoSimilarity
-from rdkit.rdBase import DisableLog
+from rdkit.rdBase import DisableLog, LogToPythonLogger
 
 try:
     from rdkit.Contrib.SA_Score import sascorer
@@ -358,3 +363,12 @@ def count_hydrogens_added_by_rdkit(mol: Mol) -> int:
     """Count the number of hydrogens added by RDKit."""
 
     return AddHs(mol).GetNumAtoms() - mol.GetNumAtoms()
+
+
+def protect_from_segmentation_fault(mol: Mol) -> Mol:
+    """Check that bonds with sterochemistry have enough stereo atoms."""
+
+    # https://github.com/greglandrum/rdkit/commit/7b2bd668ea755101ac6d05597358b4348a0bbd66
+    for bond in mol.GetBonds():
+        if bond.GetStereo() == BondStereo.STEREOANY and len(bond.GetStereoAtoms()) < 2:
+            raise ValueError("Bond with STEREOANY stereochemistry without enough stereo atoms")
