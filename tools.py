@@ -365,10 +365,11 @@ def count_hydrogens_added_by_rdkit(mol: Mol) -> int:
     return AddHs(mol).GetNumAtoms() - mol.GetNumAtoms()
 
 
-def protect_from_segmentation_fault(mol: Mol) -> Mol:
+def protect_from_segmentation_fault(mol: Mol):
     """Check that bonds with sterochemistry have enough stereo atoms."""
 
     # https://github.com/greglandrum/rdkit/commit/7b2bd668ea755101ac6d05597358b4348a0bbd66
     for bond in mol.GetBonds():
         if bond.GetStereo() == BondStereo.STEREOANY and len(bond.GetStereoAtoms()) < 2:
-            raise ValueError("Bond with STEREOANY stereochemistry without enough stereo atoms")
+            # raise ValueError("Bond with STEREOANY stereochemistry without enough stereo atoms")
+            bond.SetStereo(BondStereo.STEREONONE)
