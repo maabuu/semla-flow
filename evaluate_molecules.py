@@ -30,6 +30,7 @@ from tools import (
     count_radicals,
     count_rings,
     get_name,
+    protect_from_segmentation_fault,
 )
 
 logger = logging.getLogger(__name__)
@@ -68,6 +69,8 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--output", "-o", type=Path, help=help_line)
     help_line = "Run on first N molecules only."
     parser.add_argument("--n", "-n", type=int, help=help_line, default=None)
+    help_line = "Previous results."
+    parser.add_argument("--continue_file", type=Path, help=help_line, default=None)
     help_line = "Disable PB checks."
     parser.add_argument("--nopb", action="store_false", help=help_line)  # by default PB checks on, if flag set then off
     help_line = "Logging level."
@@ -137,6 +140,7 @@ def evaluate_one(block: str, pb=True) -> dict[str, float | int | str]:
     if pb:
         try:
             mol = MolFromMolBlock(block, sanitize=False, removeHs=False, strictParsing=False)
+            protect_from_segmentation_fault(mol)
             posebuster_results = compute_posebusters_validity(mol)
             results = posebuster_results | results
         except Exception as e:
@@ -147,22 +151,39 @@ def evaluate_one(block: str, pb=True) -> dict[str, float | int | str]:
     return results
 
 
-def main(input_file: Path, output_file: Path, n: int | None = None, timeout: int | None = None, debug: bool = False, pb=True):
+def main(
+    input_file: Path,
+    output_file: Path,
+    n: int | None = None,
+    timeout: int | None = None,
+    debug: bool = False,
+    pb=True,
+    continue_file: Path | None = None,
+):
     """Evaluate the molecules."""
 
     output_file = output_file or input_file.with_suffix(".csv")
     if Path(output_file).exists():
         raise FileExistsError(f"Output file {output_file} already exists.")
 
+    mol_blocks = open(input_file).read().rstrip().rstrip("\n").rstrip("\n").rstrip("$$$$").split("$$$$\n")
+    blocks = [(i, block) for i, block in enumerate(mol_blocks)]
 
-    # blocks = blocks[29500:]
+    if continue_file is not None:
+        already_complete = set(pd.read_csv(continue_file, low_memory=False)["name"].dropna().str.split("_").str[1].astype(int).unique())
+        blocks = [block for block in blocks if block[0] not in already_complete]
+
+    if n is not None:
+        blocks = blocks[:n]
 
     with ProcessPoolExecutor(max_workers=None) as executor, ProgressBar() as progress:
         # with ThreadPoolExecutor(initializer=silence_rdkit) as executor:
         task = progress.add_task("Submitting jobs: ", total=len(blocks))
+        task_block_ids = set()
         futures = []
-        for i, block in enumerate(blocks):
+        for i, block in blocks:
             # replace the name of the molecule
+            task_block_ids.add(i)
             block = f"molblock_{i:07d}" + "\n" + block.split("\n", 1)[-1]
             futures.append(executor.submit(evaluate_one, block, pb=pb))
             progress.update(task, advance=1)
@@ -172,10 +193,13 @@ def main(input_file: Path, output_file: Path, n: int | None = None, timeout: int
         # for future in tqdm(as_completed(futures), total=len(futures), desc="Collecting jobs"):
         for future in as_completed(futures):
             try:
-                results.append(future.result(timeout=timeout))
+                result = future.result(timeout=timeout)
+                results.append(result)
+                task_block_ids.remove(int(result["name"].split("_")[1]))
             except BrokenProcessPool as exception:
                 logger.critical("BrokenProcessPool: %s", exception)
-                results.append({"errorfree": 0, "error": str(exception).replace("\n", " ")})
+                logger.critical("Unfinished IDs: %s", str(sorted(task_block_ids)))
+                raise exception
             except Exception as exception:
                 results.append({"errorfree": 0, "error": str(exception).replace("\n", " ")})
             progress.update(task, advance=1)
@@ -184,11 +208,10 @@ def main(input_file: Path, output_file: Path, n: int | None = None, timeout: int
     if debug:
         print(results_df)
         return None
-    output_file = output_file or input_file.with_suffix(".csv")
     results_df.to_csv(output_file, index=False)
 
 
 if __name__ == "__main__":
     args = parse_arguments()
     setup_logging(level=args.logging)
-    main(args.predicted, args.output, n=args.n, pb=args.nopb, debug=args.debug)
+    main(args.predicted, args.output, n=args.n, pb=args.nopb, debug=args.debug, continue_file=args.continue_file)
