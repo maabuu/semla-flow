@@ -150,11 +150,10 @@ def evaluate_one(block: str, pb=True) -> dict[str, float | int | str]:
 def main(input_file: Path, output_file: Path, n: int | None = None, timeout: int | None = None, debug: bool = False, pb=True):
     """Evaluate the molecules."""
 
-    blocks = open(input_file).read().rstrip().rstrip("\n").rstrip("\n").rstrip("$$$$").split("$$$$\n")
+    output_file = output_file or input_file.with_suffix(".csv")
+    if Path(output_file).exists():
+        raise FileExistsError(f"Output file {output_file} already exists.")
 
-    if n and len(blocks) > n:
-        logger.warning("Running on first %d molecules in file only.", n)
-    blocks = blocks[:n]
 
     # blocks = blocks[29500:]
 
