@@ -1,20 +1,24 @@
-# Basic Gitignore file
-
 # User specific paths
 datasets/
 wandb/
 output/
 plots/
+plots_old/
 archive_conditional/
 predictions/
 evaluation/
 slurm/
 tables/
 
-# shared outside of repo
+# Shared outside of repo
 predictions/
 data/
 models/
+
+# Env
+uv.lock
+.venv
+.venv/
 
 # Editors
 .vscode/
@@ -45,3 +49,4 @@ slurm-*
 # Data files
 *.csv
 *.sdf
+*.npy

@@ -58,6 +58,8 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("predicted", type=Path, help=help_line)
     help_line = "Output file."
     parser.add_argument("--output", "-o", type=Path, help=help_line, default=None)
+    help_line = "Do EM"
+    parser.add_argument("--noem", "-noem", action="store_false", help=help_line)
     help_line = "Logging level."
     parser.add_argument("--logging", "-l", type=int, help=help_line, default=logging.CRITICAL)
     help_line = "Enable debug mode."
@@ -65,7 +67,7 @@ def parse_arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def optimize_molecule(block: str, max_iters: int = 100000) -> Mol:
+def optimize_molecule(block: str, em=True, max_iters: int = 100000) -> Mol:
     """Minimize energy using MMFF energy minimization."""
 
     results = {}
@@ -102,7 +104,7 @@ def optimize_molecule(block: str, max_iters: int = 100000) -> Mol:
     return results
 
 
-def main(input_file: Path, output_file: Path | None = None, debug: bool = False):
+def main(input_file: Path, output_file: Path | None = None, em=True, debug: bool = False):
     """Run energy minimization on the molecules."""
 
     with open(input_file, "r") as reader:
@@ -119,7 +121,7 @@ def main(input_file: Path, output_file: Path | None = None, debug: bool = False)
         for i, block in enumerate(blocks):
             if debug and i == total:
                 break
-            futures.append(executor.submit(optimize_molecule, block))
+            futures.append(executor.submit(optimize_molecule, block, em=em))
             progress.update(task, advance=1)
 
         results = []
@@ -144,4 +146,4 @@ def main(input_file: Path, output_file: Path | None = None, debug: bool = False)
 if __name__ == "__main__":
     args = parse_arguments()
     setup_logging(level=args.logging)
-    main(args.predicted, args.output, debug=args.debug)
+    main(args.predicted, args.output, debug=args.debug, em=args.noem)

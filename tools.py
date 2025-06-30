@@ -14,6 +14,7 @@ from posebusters.modules.sucos import get_feature_map_score, get_sucos_score
 from rdkit import Chem
 from rdkit.Chem import QED, Crippen, Descriptors, Lipinski, RemoveStereochemistry
 from rdkit.Chem.AllChem import DeleteSubstructs, GetMolFrags, GetMorganGenerator, ReplaceSubstructs
+from rdkit.Chem.Descriptors import NumRadicalElectrons
 from rdkit.Chem.Draw import MolsToGridImage
 from rdkit.Chem.MolStandardize.rdMolStandardize import CleanupParameters, LargestFragmentChooser
 from rdkit.Chem.rdchem import BondStereo, Mol

@@ -15,7 +15,7 @@ from rdkit.Chem.rdmolfiles import MolFromMolBlock
 from rdkit.Chem.rdmolops import AddHs, CombineMols, GetMolFrags, RemoveAllHs, RemoveHs, SanitizeMol
 from rdkit.rdBase import LogToPythonLogger
 from rich.logging import RichHandler
-from rich.progress import BarColumn, MofNCompleteColumn, Progress, TaskProgressColumn, TextColumn, TimeRemainingColumn, track
+from rich.progress import BarColumn, MofNCompleteColumn, Progress, TaskProgressColumn, TextColumn, TimeRemainingColumn
 
 from tools import (
     compute_ghose_filter,
@@ -166,8 +166,41 @@ def main(
     if Path(output_file).exists():
         raise FileExistsError(f"Output file {output_file} already exists.")
 
-    mol_blocks = open(input_file).read().rstrip().rstrip("\n").rstrip("\n").rstrip("$$$$").split("$$$$\n")
-    blocks = [(i, block) for i, block in enumerate(mol_blocks)]
+    mol_blocks_combined = open(input_file).read().rstrip().rstrip("\n").rstrip("\n").rstrip("$$$$")
+    blocks = [(i, block) for i, block in enumerate(mol_blocks_combined.split("$$$$\n"))]
+
+    # ids = [
+    #     # 44512,
+    #     # 44747,
+    #     # 45056,
+    #     # 45285,
+    #     # 45347,
+    #     # 45352,
+    #     # 45427,
+    #     # 45535,
+    #     # 45774,
+    #     # 45893,
+    #     # 46140,
+    #     # 46204,
+    #     # 46273,
+    #     # 46283,
+    #     # 46292,
+    #     46294,
+    #     # 46311,
+    #     # 46321,
+    #     # 46322,
+    #     # 46326,
+    #     # 46337,
+    #     # 46342,
+    #     # 46344,
+    #     # 46345,
+    #     # 46348,
+    #     # 46349,
+    #     # 46350,
+    #     # 46351,
+    # ]
+    # blocks = [block for block in blocks if block[0] in ids]
+    # print(blocks)
 
     if continue_file is not None:
         already_complete = set(pd.read_csv(continue_file, low_memory=False)["name"].dropna().str.split("_").str[1].astype(int).unique())
@@ -199,12 +232,13 @@ def main(
             except BrokenProcessPool as exception:
                 logger.critical("BrokenProcessPool: %s", exception)
                 logger.critical("Unfinished IDs: %s", str(sorted(task_block_ids)))
+                # break
                 raise exception
             except Exception as exception:
                 results.append({"errorfree": 0, "error": str(exception).replace("\n", " ")})
             progress.update(task, advance=1)
 
-    results_df = pd.DataFrame(results).sort_values("name")
+    results_df = pd.DataFrame(results).sort_values("name").set_index("name").reset_index()
     if debug:
         print(results_df)
         return None

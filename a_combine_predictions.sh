@@ -11,8 +11,8 @@ done
 obabel combined_batch_*.sdf -O ../eqgat_100000_predictions.sdf
 
 # GEOLDM - convert and combine txt files
+cd archive_conditional/predictions/unconditional/geoldm/raw
 conda activate evaluation
-cd predictions
 for i in {0..9}
 do
     echo "Processing batch ${i}..."
