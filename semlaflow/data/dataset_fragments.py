@@ -4,7 +4,6 @@ import pandas as pd
 import pickle
 import torch
 
-from rdkit import Chem
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 from semlaflow.data import const
@@ -13,7 +12,7 @@ from semlaflow.data import const
 from pdb import set_trace
 
 from rdkit import Chem, Geometry
-
+from semlaflow.preprocess import *
 
 def create_conformer(coords):
     conformer = Chem.Conformer()
@@ -607,6 +606,37 @@ def create_templates_for_linker_generation(data, linker_sizes):
 
     return collate(decoupled_data)
 
+def create_dummy_molecule(coords):
+    # Create an RDKit molecule object
+    mol = Chem.RWMol()
+    # Add dummy atoms to the molecule using the provided coordinates
+    for coord in coords:
+        x, y, z = coord
+        atom = Chem.Atom(0)  # 0 represents a dummy atom
+        atom.SetNoImplicit(True)  # Set to avoid implicit valence errors
+        atom_idx = mol.AddAtom(atom)  # Add the atom to the molecule
+    conf = Chem.Conformer(len(coords))
+    for i, coord in enumerate(coords):
+        x, y, z = coord
+        conf.SetAtomPosition(i, (float(x), float(y), float(z)))  # Set atom position
+    mol.AddConformer(conf, assignId=True)  # Add conformer to the molecule
+    return mol
+
+from typing import List, Optional
+
+from rdkit import Chem
+
+def load_coords_from_sdf(sdf_path: str) -> List[List[float]]:
+    suppl = Chem.SDMolSupplier(sdf_path, removeHs=False)
+    mol = next((m for m in suppl if m is not None), None)
+    if mol is None or mol.GetNumConformers() == 0:
+        raise ValueError("No valid molecule with 3D coordinates found in SDF.")
+
+    conf = mol.GetConformer()
+    coords = [list(conf.GetAtomPosition(i)) for i in range(mol.GetNumAtoms())]
+    return coords
+
+
 if __name__ == "__main__":
     # val_data_prefix =  'geom_multifrag_test'
     # data_path = r'C:\Users\ziv-admin\PycharmProjects\semla-flow\geom_data\difflinker_data'
@@ -693,23 +723,89 @@ if __name__ == "__main__":
     # Path(r'C:\Users\ziv-admin\PycharmProjects\semla-flow\geom_data\fragmentsbla.smol').write_bytes(dataset_bytes)
 
 
-    from semlaflow.preprocess import *
+    # from semlaflow.preprocess import *
+    #
+    # supplier = Chem.SDMolSupplier(r'C:\Users\ziv-admin\PycharmProjects\semla-flow\geom_data\active_site\mpro_active_site_fragments_combined 2.sdf'
+    #                               ,sanitize=False)
+    # supplier = supplier[0]
+    # num_mols = 5000
+    # mu = 45
+    # sigma = 3
+    # sizes = np.random.normal(mu, sigma, num_mols)
+    # sizes = np.round(sizes).astype(int)
+    # fragments = []
+    # for num_atoms in sizes:
+    #         frag_geom = GeometricMol.sampled_from_rdkit(supplier, num_atoms)
+    #         frag_geom = GeometricMol.pad_molecule(frag_geom, num_atoms)
+    #         fragments.append(frag_geom)
+    #
+    # # smol_mols = [GeometricMol.from_rdkit(raw_mol) for raw_mol in molecules]
+    # batch = GeometricMolBatch.from_list(fragments)
+    # dataset_bytes = batch.to_bytes()
+    # Path(r'C:\Users\ziv-admin\PycharmProjects\semla-flow\geom_data\active_site\sampled_atoms.smol').write_bytes(dataset_bytes)
 
-    supplier = Chem.SDMolSupplier(r'C:\Users\ziv-admin\PycharmProjects\semla-flow\geom_data\active_site\mpro_active_site_fragments_combined 2.sdf'
-                                  ,sanitize=False)
-    supplier = supplier[0]
-    num_mols = 5000
-    mu = 45
-    sigma = 3
-    sizes = np.random.normal(mu, sigma, num_mols)
-    sizes = np.round(sizes).astype(int)
+
+# sample for natural ligand hopping
+#     paths = [
+#         r'C:\Users\ziv\Documents\FlowMol\shepered\NP_analogues_2500\reference_molecule_0.sdf',
+#         r'C:\Users\ziv\Documents\FlowMol\shepered\NP_analogues_2500\reference_molecule_1.sdf',
+#         r'C:\Users\ziv\Documents\FlowMol\shepered\NP_analogues_2500\reference_molecule_2.sdf',
+#     ]
+#
+#     n1_values = np.linspace(36, 80, 25, dtype=int)
+#     samples_per_n1 = 100
+#
+#     for ref_index, path in enumerate(paths):
+#         # ref_index = 0
+#         supplier = Chem.SDMolSupplier(path, removeHs=False)
+#         ref_mol = supplier[0]
+#
+#         fragments = []
+#
+#         for n1 in n1_values:
+#             for _ in range(samples_per_n1):
+#                 frag_geom = GeometricMol.sampled_from_rdkit(ref_mol, n1, include_bonds= True, pharmha_precent = 0.9)
+#                 fragments.append(frag_geom)
+#
+#         batch = GeometricMolBatch.from_list(fragments)
+#         dataset_bytes = batch.to_bytes()
+#
+#         output_path = Path(
+#             fr'C:\Users\ziv-admin\PycharmProjects\semla-flow\shepherd_data\NP_analogues_2500\sampled_inter_with_pharmha_{ref_index}_36_80.smol'
+#         )
+#         output_path.write_bytes(dataset_bytes)
+
+
+# sample for Fragment merging
+
+    n1_values = np.linspace(50, 65, 40, dtype=int)
+    samples_per_n1 = 25
+    external_coords = load_coords_from_sdf(r'C:\Users\ziv-admin\PycharmProjects\semla-flow\shepherd_data\Fragment_merging\pharma_profile.sdf')
+    supplier = Chem.SDMolSupplier(
+        r'C:\Users\ziv-admin\PycharmProjects\semla-flow\shepherd_data\Fragment_merging\merged_fragments.sdf')
+    ref_mol = supplier[0]
+    ref_mol = Chem.AddHs(ref_mol, addCoords=True)
     fragments = []
-    for num_atoms in sizes:
-            frag_geom = GeometricMol.sampled_from_rdkit(supplier, num_atoms)
-            frag_geom = GeometricMol.pad_molecule(frag_geom, num_atoms)
+
+    for n1 in n1_values:
+        for _ in range(samples_per_n1):
+            frag_geom = GeometricMol.from_rdkit_with_external_pharma(ref_mol,external_coords, int(n1), include_bonds= True, match_tolerance = 1.)
+            # frag_geom = GeometricMol.pad_molecule(frag_geom, n1)
             fragments.append(frag_geom)
 
-    # smol_mols = [GeometricMol.from_rdkit(raw_mol) for raw_mol in molecules]
+    # writer = Chem.SDWriter(
+    #     r'C:\Users\ziv-admin\PycharmProjects\semla-flow\shepherd_data\Fragment_merging\sampled_shepherd_pharma.sdf')
+    # for i, frag in enumerate(fragments):
+    #     # convert back to an RDKit Mol
+    #     coords = frag.coords.numpy()
+    #     rdkit_mol = create_dummy_molecule(coords)
+    #     writer.write(rdkit_mol)
+    # writer.close()
+
     batch = GeometricMolBatch.from_list(fragments)
     dataset_bytes = batch.to_bytes()
-    Path(r'C:\Users\ziv-admin\PycharmProjects\semla-flow\geom_data\active_site\sampled_atoms.smol').write_bytes(dataset_bytes)
+
+    output_path = Path(
+        r'C:\Users\ziv-admin\PycharmProjects\semla-flow\shepherd_data\Fragment_merging\sampled_shepherd_pharma_50_65.smol'
+    )
+    output_path.write_bytes(dataset_bytes)

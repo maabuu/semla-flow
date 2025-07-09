@@ -2,7 +2,12 @@
 
 This project creates a novel equivariant attention-based message passing architecture, Semla, for molecular design and dynamics tasks. We train a molecular generation model, SemlaFlow, using flow matching with optimal transport to generate realistic 3D molecular structures.
 
-
+how to use shepherd-score:
+git clone https://github.com/coleygroup/shepherd-score.git
+cd and pip install -e .
+get binary from https://github.com/grimme-lab/xtb/releases/tag/v6.7.1
+tar -xf xtb-6.7.1-version-applicable-to-your-OS
+make xtb executable and add the bin to your $PATH
 ## New Features
 ### Generate Shape Conditioned Molecules
 This feature generates 3D molecular structures that are similar to a seed molecule, based on a pre-trained model.

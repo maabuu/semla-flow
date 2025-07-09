@@ -15,10 +15,13 @@ from rdkit import Chem
 from scipy.spatial.transform import Rotation
 import random
 
+from typing import List, Optional
+
 import semlaflow.util.rdkit as smolRD
 import semlaflow.util.functional as smolF
 from semlaflow.util.tokeniser import Vocabulary
-
+from semlaflow.util.utils_pharmacophores import getPharamacophoreCoords
+from scipy.spatial.distance import cdist
 
 # Type aliases
 _T = torch.Tensor
@@ -35,6 +38,66 @@ PICKLE_PROTOCOL = 4
 # **********************
 # *** Util functions ***
 # **********************
+def sample_diverse_pharmacophores(coords_with_families, k, min_dist=1.0):
+    """
+    Sample up to `k` pharmacophore features such that:
+    - Features from the same family must be at least `min_dist` apart.
+    - Features from different families can be any distance apart.
+
+    Returns:
+        List of selected indices (relative to original input order)
+    """
+    from scipy.spatial.distance import cdist
+    import numpy as np
+    import random
+
+    # Pair each entry with its original index
+    indexed_coords = list(enumerate(coords_with_families))
+    random.shuffle(indexed_coords)
+
+    selected = []
+    selected_by_family = {}
+    seen_coords = set()
+
+    for original_idx, entry in indexed_coords:
+        fam = entry['Family']
+        coord = np.array(entry['Coords'])
+        coord_key = tuple(np.round(coord, decimals=3))
+
+        # if coord_key in seen_coords:
+        #     continue
+
+        if fam not in selected_by_family:
+            selected.append(original_idx)
+            selected_by_family[fam] = [coord]
+            seen_coords.add(coord_key)
+        else:
+            dists = cdist([coord], selected_by_family[fam])[0]
+            if np.all(dists > min_dist):
+                selected.append(original_idx)
+                selected_by_family[fam].append(coord)
+
+        if len(selected) >= k:
+            break
+
+    return selected
+
+# def sample_diverse_pharmacophores( coords, k, min_dist=1.0):
+#     selected = []
+#     coords = np.array(coords)
+#     remaining = list(range(len(coords)))
+#     random.shuffle(remaining)
+#
+#     while remaining and len(selected) < k:
+#         idx = remaining.pop(0)
+#         if not selected:
+#             selected.append(idx)
+#             continue
+#         dists = cdist([coords[idx]], coords[selected])[0]
+#         if np.all(dists > min_dist):
+#             selected.append(idx)
+#
+#     return selected
 
 
 def _check_type(obj, obj_type, name="object"):
@@ -478,11 +541,39 @@ class GeometricMol(SmolMol):
         mol = GeometricMol(coords, atomics, bond_indices, bond_types, charges=charges, str_id=smiles)
         return mol
 
-    @staticmethod
-    def sampled_from_rdkit(mol: Chem.rdchem.Mol, size: Optional[int]) -> GeometricMol:
-        # TODO handle this better - maybe create 3D info if not provided, with a warning
+    def from_rdkit_with_external_pharma(
+            mol: Chem.rdchem.Mol,
+            external_coords: List[List[float]],
+            size: Optional[int],
+            include_bonds: bool = False,
+            match_tolerance: float = 0.1
+    ) -> GeometricMol:
         if mol.GetNumConformers() == 0 or not mol.GetConformer().Is3D():
-            raise RuntimeError(f"The default conformer must have 3D coordinates")
+            raise RuntimeError("The default conformer must have 3D coordinates")
+
+        new_feats_dict, idxsDict, allCoords = getPharamacophoreCoords(mol)
+
+        features = [np.atleast_1d(arr).tolist() for arr_list in idxsDict.values() for arr in arr_list]
+        coords_with_families_list = [
+            {'Coords': np.array(coord), 'Family': family}
+            for coord, family in zip(allCoords['Coords'], allCoords['Family'])
+        ]
+
+        # Match external coords to extracted pharmacophore coords
+        # matched_indices = []
+        # for ext_coord in external_coords:
+        #     ext_coord = np.array(ext_coord)
+        #     distances = [np.linalg.norm(ext_coord - feat['Coords']) for feat in coords_with_families_list]
+        #     closest_idx = int(np.argmin(distances))
+        #     matched_indices.append(closest_idx)
+
+        matched_indices = [31, 30, 44, 42, 20, 3, 25, 11, 38, 50, 51, 54, 58, 68, 61, 54, 58, 68, 61, 118, 112, 77, 124, 0, 3, 11, 14]
+
+        if not matched_indices:
+            raise ValueError("No matching pharmacophore features found for provided coordinates.")
+
+        sampled_features = [features[i] for i in matched_indices]
+        pharm_indices = sorted(set(i for group in sampled_features for i in group))
 
         conf = mol.GetConformer()
         smiles = smolRD.smiles_from_mol(mol)
@@ -492,13 +583,127 @@ class GeometricMol(SmolMol):
         charges = [atom.GetFormalCharge() for atom in mol.GetAtoms()]
 
         bonds = []
+        if include_bonds:
+            for bond in mol.GetBonds():
+                bond_start = bond.GetBeginAtomIdx()
+                bond_end = bond.GetEndAtomIdx()
+                bond_type = smolRD.BOND_IDX_MAP.get(bond.GetBondType())
+                if bond_type is None:
+                    raise NotImplementedError(f"Unsupported bond type {bond.GetBondType()}")
+                bonds.append([bond_start, bond_end, bond_type])
+
+        num_atoms = len(atomics)
+        if size is None or size >= num_atoms:
+            sampled_indices = list(range(num_atoms))
+        else:
+            sampled_indices = list(pharm_indices)
+            remaining = list(set(range(num_atoms)) - set(sampled_indices))
+            random.shuffle(remaining)
+            min_distance = 1.
+            sampled_indices = pharm_indices
+            for idx in remaining:
+                if len(sampled_indices) >= size:
+                    break
+                if all(np.linalg.norm(coords[idx] - coords[other]) >= min_distance for other in sampled_indices):
+                    sampled_indices.append(idx)
+
+        sampled_indices = sorted(sampled_indices)
+
+        coords = coords[sampled_indices]
+        atomics = [atomics[i] for i in sampled_indices]
+        charges = [charges[i] for i in sampled_indices]
+
+        if include_bonds:
+            idx_map = {old_idx: new_idx for new_idx, old_idx in enumerate(sampled_indices)}
+            bonds_filtered = [
+                (idx_map[i], idx_map[j], btype)
+                for i, j, btype in bonds
+                if i in idx_map and j in idx_map
+            ]
+            if bonds_filtered:
+                bond_arr = torch.tensor(bonds_filtered, dtype=torch.long)
+                bond_indices = bond_arr[:, :2]
+                bond_types = bond_arr[:, 2]
+            else:
+                bond_indices = torch.empty((0, 2), dtype=torch.long)
+                bond_types = torch.empty((0,), dtype=torch.long)
+
+        coords = torch.tensor(coords)
+        atomics = torch.tensor(atomics)
+        charges = torch.tensor(charges)
+
+        if include_bonds:
+            mol = GeometricMol(coords, atomics, bond_indices, bond_types, charges=charges, str_id=smiles)
+        else:
+            mol = GeometricMol(coords, atomics, charges=charges, str_id=smiles)
+
+        return mol
+
+    @staticmethod
+    def sampled_from_rdkit(mol: Chem.rdchem.Mol, size: Optional[int], include_bonds: bool = False, pharma_percent: float = 1.0) -> GeometricMol:
+        # TODO handle this better - maybe create 3D info if not provided, with a warning
+        if mol.GetNumConformers() == 0 or not mol.GetConformer().Is3D():
+            raise RuntimeError(f"The default conformer must have 3D coordinates")
+
+        new_feats_dict, idxsDict, allCoords = getPharamacophoreCoords(mol)
+
+
+        features = [np.atleast_1d(arr).tolist() for arr_list in idxsDict.values() for arr in arr_list]
+        # feature_coords = [np.array(coord) for coord in allCoords['Coords']]
+        coords_with_families_list = [
+            {'Coords': coord, 'Family': family}
+            for coord, family in zip(allCoords['Coords'], allCoords['Family'])
+        ]
+
+        # Step 2: sample N pharmacophore features
+        selected_idx = sample_diverse_pharmacophores(coords_with_families_list[:127], k=int(len(features) * pharma_percent), min_dist=3.0)
+        sampled_features = [features[i] for i in selected_idx]
+        # Step 3: get the atoms involved in the sampled features
+        pharm_indices = sorted(set(i for group in sampled_features for i in group))
+
+        conf = mol.GetConformer()
+        smiles = smolRD.smiles_from_mol(mol)
+
+        coords = np.array(conf.GetPositions())
+        atomics = [atom.GetAtomicNum() for atom in mol.GetAtoms()]
+        charges = [atom.GetFormalCharge() for atom in mol.GetAtoms()]
+
+        bonds = []
+        if include_bonds:
+            for bond in mol.GetBonds():
+                bond_start = bond.GetBeginAtomIdx()
+                bond_end = bond.GetEndAtomIdx()
+
+                # TODO perhaps print a warning but just don't add the bond?
+                bond_type = smolRD.BOND_IDX_MAP.get(bond.GetBondType())
+                if bond_type is None:
+                    raise NotImplementedError(f"Unsupported bond type {bond.GetBondType()}")
+
+                bonds.append([bond_start, bond_end, bond_type])
 
         # If size is None or exceeds the number of atoms, use all atoms
         num_atoms = len(atomics)
         if size is None or size >= num_atoms:
             sampled_indices = list(range(num_atoms))
         else:
-            sampled_indices = random.sample(range(num_atoms), size)
+            # always include pharmacophore atoms first
+            k_pharm = len(pharm_indices)
+            if k_pharm >= size:
+                sampled_indices = pharm_indices[:size]
+            else:
+                # choose random additional atoms beyond pharm_indices
+                remaining = list(set(range(num_atoms)) - set(pharm_indices))
+                random.shuffle(remaining)
+                min_distance = 1.
+                sampled_indices = pharm_indices
+                for idx in remaining:
+                    if len(sampled_indices) >= size:
+                        break
+                    if all(np.linalg.norm(coords[idx] - coords[other]) >= min_distance for other in sampled_indices):
+                     sampled_indices.append(idx)
+
+                # extra = random.sample(remaining, size - k_pharm)
+                # sampled_indices = pharm_indices + extra
 
         # Sort indices to preserve relative order
         sampled_indices = sorted(sampled_indices)
@@ -508,13 +713,32 @@ class GeometricMol(SmolMol):
         atomics = [atomics[i] for i in sampled_indices]
         charges = [charges[i] for i in sampled_indices]
 
+        # Build the sampled bond list if requested
+        if include_bonds:
+            idx_map = {old_idx: new_idx for new_idx, old_idx in enumerate(sampled_indices)}
+
+            bonds_filtered = []
+            for i, j, btype in bonds:
+                if i in idx_map and j in idx_map:
+                    bonds_filtered.append((idx_map[i], idx_map[j], btype))
+            if bonds_filtered:
+                bond_arr = torch.tensor(bonds_filtered, dtype=torch.long)
+                bond_indices = bond_arr[:, :2]
+                bond_types = bond_arr[:, 2]
+            else:
+                bond_indices = torch.empty((0, 2), dtype=torch.long)
+                bond_types = torch.empty((0,), dtype=torch.long)
+
 
         coords = torch.tensor(coords)
         atomics = torch.tensor(atomics)
         bonds = torch.tensor(bonds)
         charges = torch.tensor(charges)
 
-        mol = GeometricMol(coords, atomics, charges=charges, str_id=smiles)
+        if include_bonds:
+            mol = GeometricMol(coords, atomics, bond_indices, bond_types, charges=charges, str_id=smiles)
+        else:
+            mol = GeometricMol(coords, atomics, charges=charges, str_id=smiles)
         return mol
     @staticmethod
     def pad_molecule(molecule: GeometricMol, target_size: int) -> GeometricMol:

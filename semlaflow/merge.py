@@ -151,7 +151,7 @@ def build_dm(args, hparams, vocab):
     elif args.dataset_split == "val":
         dataset_path = Path(args.data_path) / "val.smol"
     elif args.dataset_split == "test":
-        dataset_path = Path(args.data_path) / "sampled_atoms.smol"
+        dataset_path = Path(args.data_path) / "sampled_with_pharma_50_89_addh_no_pad.smol"
 
     dataset = GeometricDataset.load(dataset_path, transform=transform)
     dataset = dataset.sample(args.n_molecules, replacement=False, fixed_indices = True)

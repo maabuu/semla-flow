@@ -166,7 +166,7 @@ def evaluate_metrics(generated_sdf, reference_sdf, batch_size=100, results_path 
     # Load molecules and group by reference names
     generated_mols = read_sdf(generated_sdf)
     reference_mols = SDMolSupplier(reference_sdf)
-
+    reference_mols = [mol for mol in reference_mols if mol is not None]
     # Group generated molecules by their reference names
     grouped_mols = {}
     for name, mol in generated_mols:
@@ -269,9 +269,9 @@ def evaluate_metrics(generated_sdf, reference_sdf, batch_size=100, results_path 
 
 
 if __name__ == "__main__":
-    generated_sdf_path = "../predictions/predictions_d72_s0.10.sdf"  # Path to generated SDF file
-    reference_sdf_path = r"C:\Users\ziv-admin\PycharmProjects\semla-flow\geom_data\smol\test_first_1000_rdkit.sdf"  # Path to reference SDF file
-    results_path = '../predictions/72_steps'
+    generated_sdf_path = "../predictions/link_replacment_no_h.sdf"  # Path to generated SDF file
+    reference_sdf_path = r"C:\Users\ziv-admin\PycharmProjects\semla-flow\geom_data\difflinker_data\true_fragments_openbabel_h_sanitize.sdf"  # Path to reference SDF file
+    results_path = '../predictions/link_no_h/'
 
     results, mean_metrics, std_metrics = evaluate_metrics(
         generated_sdf_path, reference_sdf_path, batch_size=100, results_path=results_path

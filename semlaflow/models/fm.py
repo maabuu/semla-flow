@@ -1018,6 +1018,7 @@ class MolecularCFM(L.LightningModule):
 
         step_sizes = [t1 - t0 for t0, t1 in zip(time_points[:-1], time_points[1:])]
         # Start the loop from denoise_steps
+        first_step_size = step_sizes[0]
         step_sizes = step_sizes[-denoise_steps:]
 
         curr = {k: v.clone() for k, v in interpolated.items()}
@@ -1027,7 +1028,7 @@ class MolecularCFM(L.LightningModule):
             "atomics": torch.zeros_like(prior["atomics"]),
             "bonds": torch.zeros_like(prior["bonds"])
         }
-
+        first_iter = True
         with torch.no_grad():
             for step_size in step_sizes:
                 cond = cond_batch if self.self_condition else None
@@ -1049,6 +1050,22 @@ class MolecularCFM(L.LightningModule):
                     "charges": charge_probs,
                     "mask": curr["mask"]
                 }
+
+                if first_iter:
+                    # zero-time integrator step (no progression)
+                    t0 = torch.zeros_like(times)
+                    curr0 = self.integrator.step(curr, predicted, prior, t0, first_step_size)
+
+                    # actual-time integrator step
+                    curr = self.integrator.step(curr, predicted, prior, times, step_size)
+                    # advance global time once
+                    times = times + step_size
+
+                    # override only bonds from zero-time prediction
+                    curr["bonds"] = curr0["bonds"]
+
+                    first_iter = False
+                    continue
 
                 curr = self.integrator.step(curr, predicted, prior, times, step_size)
                 times = times + step_size
